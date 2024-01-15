@@ -9,7 +9,7 @@
 #include <string>
 #include "pokemon.h"
 #include "battle.h"
-
+// test comment
 struct Range {
     unsigned long start;
     unsigned long stop;
