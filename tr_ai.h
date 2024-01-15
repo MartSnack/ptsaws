@@ -1,0 +1,126 @@
+#ifndef TR_AI_H_
+#define TR_AI_H_
+#include "battle.h"
+#define COMP_POWER_MAX 1
+#define COMP_POWER_NOT_MAX 2
+#define COMP_POWER_NONE 3
+#define COMP_POWER_KO 4
+
+#define QUAD_EFFECTIVE (160)
+#define SUPER_EFFECTIVE (80)
+#define STAB_EFFECTIVE (60)
+#define NORMAL_EFFECTIVE (40)
+#define NOT_EFFECTIVE (20)
+#define QUAD_NOT_EFFECTIVE (10)
+#define IMMUNE_EFFECTIVE (0)
+
+#define AI_BASIC (1 << 0)
+#define AI_STRONG (1 << 1)
+#define AI_EXPERT (1 << 2)
+static	const int NoCompPowerSeqNo[]={
+	7,
+	8,
+	39,
+	75,
+	80,
+	145,
+	151,
+	161,
+	170, // focus punchie
+	182,
+	190,
+	248,
+	269,
+	0xffff,
+};
+
+static	const int OkCompPowerSeqNo[]={
+	135,		
+	219,		
+	222,		
+	268,		
+	41,			
+	87,			
+	88,			
+	121,		
+	123,		
+	130,		
+	196,		
+	0xffff,
+};
+
+
+struct AiContext {
+    int damageLoss[4];
+    int score[4];
+    int currentIndex; // which move is being considered right now
+    int currentScore; // score being actively modified before being finalized in the score var
+    int currentPowerFlag; // whether the current move is most powerful, not most powerful, or doesn't deal damage
+    int currentTypeAdvantage; // current moves type advantage
+    bool lossCalcOn;
+    PokeClient self;
+    PokeClient target;
+};
+void ailog(std::string text);
+
+bool AI_IfRndUnder(BattleContext *bc, int value);
+bool AI_IfRndOver(BattleContext *bc, int value);
+bool AI_IfHpUnder(BattleContext *bc, AiContext *ac, int value, bool target);
+bool AI_IfHpOver(BattleContext *bc, AiContext *ac, int value, bool target);
+int AI_DamageCalc(BattleContext *bc, AiContext *ac, Move move, int loss);
+int AI_CompPowerCalc(BattleContext *bc, AiContext *ac, int *damage);
+static bool AI_DoesMoveKo(BattleContext *bc, AiContext *ac);
+static void AI_CheckTypeAdvantage(BattleContext *bc, AiContext *ac);
+static void AI_CompPower(BattleContext *bc, AiContext *ac);
+void processAI(BattleContext *bc);
+static void AI_INCDEC(AiContext *ac, int val);
+bool AI_DEC1(AiContext *ac);
+bool AI_DEC10(AiContext *ac);
+bool AI_DEC12(AiContext *ac);
+Weather AI_CheckWeather(BattleContext *bc);
+AbilityId AI_CheckAbility(BattleContext *bc, AiContext *ac, bool target);
+bool AI_BasicPoison(BattleContext *bc, AiContext *ac);
+bool AI_BasicDamageEnd(BattleContext *bc, AiContext *ac);
+bool AI_BasicDamage(BattleContext *bc, AiContext *ac);
+bool AI_BasicDamageStart(BattleContext *bc, AiContext *ac);
+bool AI_BasicSeq(BattleContext *bc, AiContext *ac);
+bool AI_CheckEffect(BattleContext *bc, AiContext *ac);
+bool AI_BasicPoison_NoLeafGuard(BattleContext *bc, AiContext *ac);
+bool AI_BasicPoison_NoHydration(BattleContext *bc, AiContext *ac);
+bool AI_BasicDefenseDown(BattleContext *bc, AiContext *ac);
+bool AI_BasicAccuracyDown(BattleContext *bc, AiContext *ac);
+bool AI_BasicClearBody(BattleContext *bc, AiContext *ac);
+bool AI_ExpertSeq(BattleContext *bc, AiContext *ac);
+bool AI_ExpertAccuracyDown(BattleContext *bc, AiContext *ac);
+bool AI_ExpertAccuracyDown_2(BattleContext *bc, AiContext *ac);
+bool AI_ExpertAccuracyDown_3(BattleContext *bc, AiContext *ac);
+bool AI_ExpertAccuracyDown_4(BattleContext *bc, AiContext *ac);
+bool AI_ExpertAccuracyDown_5(BattleContext *bc, AiContext *ac);
+bool AI_ExpertAccuracyDown_6(BattleContext *bc, AiContext *ac);
+bool AI_ExpertAccuracyDown_6_1(BattleContext *bc, AiContext *ac);
+bool AI_ExpertAccuracyDown_7(BattleContext *bc, AiContext *ac);
+bool AI_ExpertAccuracyDown_8(BattleContext *bc, AiContext *ac);
+bool AI_ExpertAccuracyDown_9(BattleContext *bc, AiContext *ac);
+bool AI_ExpertAccuracyDown_End(BattleContext *bc, AiContext *ac);
+bool AI_ExpertPoison(BattleContext *bc, AiContext *ac);
+bool AI_ExpertPoison_1(BattleContext *bc, AiContext *ac);
+bool AI_ExpertPoison_End(BattleContext *bc, AiContext *ac);
+bool AI_ExpertDefenceDown(BattleContext *bc, AiContext *ac);
+bool AI_ExpertDefenceDown_1(BattleContext *bc, AiContext *ac);
+bool AI_ExpertDefenceDown_2(BattleContext *bc, AiContext *ac);
+bool AI_ExpertDefenceDown_End(BattleContext *bc, AiContext *ac);
+bool AI_StrongSeq(BattleContext *bc, AiContext *ac);
+bool AI_StrongMoveCheck(BattleContext *bc, AiContext *ac);
+bool AI_StrongMoveCheck_1(BattleContext *bc, AiContext *ac);
+bool AI_StrongSuperEffective(BattleContext *bc, AiContext *ac);
+bool AI_Strong10(BattleContext *bc, AiContext *ac);
+bool AI_StrongKO(BattleContext *bc, AiContext *ac);
+bool AI_StrongKO_Weak(BattleContext *bc, AiContext *ac);
+bool AI_StrongKO_Minor(BattleContext *bc, AiContext *ac);
+bool AI_StrongKO2(BattleContext *bc, AiContext *ac);
+bool AI_StrongEnd(BattleContext *bc, AiContext *ac);
+bool AI_ExpertHighCritical(BattleContext *bc, AiContext *ac);
+bool AI_ExpertHighCritical_1(BattleContext *bc, AiContext *ac);
+
+
+#endif /*TR_AI_H*/
