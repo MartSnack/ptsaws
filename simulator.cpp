@@ -96,7 +96,7 @@ int main(int argc, char* argv[]) {
         std::cout << arg << std::endl;
     }
 
-    return 0;
+    // return 0;
     SimulationReport val;
     std::cout<<"<booting>"<<std::endl;
     using std::chrono::high_resolution_clock;
@@ -118,7 +118,7 @@ int main(int argc, char* argv[]) {
     cList.defaultCommand = COMMAND_MOVE_SLOT_2;
     cList.commands[1] = COMMAND_USE_ITEM_GUARD_SPEC;
     cList.commands[5] = COMMAND_USE_ITEM_HYPER_POTION;
-
+    // simulate a specific seed
     // simulate(218743, cList);
     // return 0;
     for(i = 0; i < divisor; i++){
