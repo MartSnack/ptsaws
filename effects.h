@@ -195,4 +195,6 @@ enum class MoveEffect {
 
 bool applyEffect(Move move, BattleContext *bc);
 bool applyMist(BattleContext *bc);
-#endif 
+bool modifyStat(bool affectSelf, Stat stat, int change, BattleContext *bc);
+
+#endif

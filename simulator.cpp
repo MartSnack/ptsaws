@@ -23,6 +23,7 @@ struct BattleReport {
 struct SimulationReport {
     unsigned long startingSeed;
     bool playerWin;
+    int playerHp;
 };
 struct CommandList {
     int defaultCommand;
@@ -31,11 +32,15 @@ struct CommandList {
 
 
 BattleReport simulate(unsigned long startingSeed, CommandList cList) {
+    BattleContext bc = setupVarFight(startingSeed);
+    // BattleContext bc = setupJupiterFight(startingSeed);
 
-    BattleContext bc = setupJupiterFight(startingSeed);
 
+    // this command doesn't matter, it gets replaced later
     bc.attacker.command = COMMAND_MOVE_SLOT_2; // attacker is us
-    bc.defender.command = COMMAND_MOVE_SLOT_1; // defender is them
+    // AI command does matter, it's the first move they make
+    // TODO: AI should actually calculate its first move here instead
+    bc.defender.command = COMMAND_MOVE_SLOT_3; // defender is them
     bool shouldContinue = true;
     int i = 0;
     int command = 0;
@@ -75,7 +80,7 @@ BattleReport simulate(unsigned long startingSeed, CommandList cList) {
 };
 SimulationReport runSimulations(Range r, CommandList cList) {
     unsigned long i;
-    SimulationReport sr = {0,true};
+    SimulationReport sr = {0,true,1000};
     BattleReport br;
     for(i=r.start;i<r.stop;i++) {
         br = simulate(i, cList);
@@ -83,6 +88,11 @@ SimulationReport runSimulations(Range r, CommandList cList) {
             sr.startingSeed = i;
             sr.playerWin = br.playerWin;
             return sr;
+        } else {
+            if(br.playerHp < sr.playerHp){
+                sr.playerHp = br.playerHp;
+                sr.startingSeed = i;
+            }
         }
     }
     return sr;
@@ -116,11 +126,11 @@ int main(int argc, char* argv[]) {
         cList.commands[i] = 0;
     }
     cList.defaultCommand = COMMAND_MOVE_SLOT_2;
-    cList.commands[1] = COMMAND_USE_ITEM_GUARD_SPEC;
-    cList.commands[5] = COMMAND_USE_ITEM_HYPER_POTION;
+    // cList.commands[1] = COMMAND_USE_ITEM_GUARD_SPEC;
+    // cList.commands[4] = COMMAND_USE_ITEM_HYPER_POTION;
     // simulate a specific seed
-    // simulate(218743, cList);
-    // return 0;
+    simulate(10052, cList);
+    return 0;
     for(i = 0; i < divisor; i++){
         ranges.push_back({i * chunkSize, (i+1) * chunkSize});
     }
@@ -134,8 +144,10 @@ int main(int argc, char* argv[]) {
         val = e.get();
         if(!val.playerWin){
             myfile << val.startingSeed << "\n";
+            std::cout << val.startingSeed << "\n";
         } else {
             myfile << "Player won" << "\n";
+            std::cout << "Player won. Lowest hp -> " << val.playerHp << " // Seed: " << val.startingSeed << std::endl;
         }
     }
     auto t2 = high_resolution_clock::now();

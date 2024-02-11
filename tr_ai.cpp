@@ -6,6 +6,7 @@
 #include "battle.h"
 #include "battle_effects.h"
 #include "tr_ai.h"
+
 void ailog(std::string text) {
     if(DEBUG & 2) {
         std::cout << "AI LOG:: " << text << std::endl;
@@ -50,6 +51,101 @@ bool AI_IfHpOver(BattleContext *bc, AiContext *ac, int value, bool target = fals
     return ((pc.team[pc.battler].bVal.bHp * 100) / pc.team[pc.battler].cHp) > value;
 }
 
+// comparator -> 0 for under, 1 for equal, 2 for over
+// stg -> 0/atk,1/def,2/
+// value -> what we compare to
+// defaults to CHECK_ATTACK
+bool AI_IfPara(BattleContext *bc, AiContext *ac, int comparator, Stat stg, int value, bool target = false){
+    PokeClient pc;
+    if(target) {
+        pc = ac->target;
+    } else {
+        pc = ac->self;
+    }
+    BattleVal aiBval = pc.team[pc.battler].bVal;
+    int currentStage = 0;
+    switch(stg){
+        case(Stat::ATTACK):
+            currentStage = aiBval.atkStg;
+            break;
+        case(Stat::DEFENSE):
+            currentStage = aiBval.defStg;
+            break;
+        case(Stat::SPECIAL_ATTACK):
+            currentStage = aiBval.spAtkStg;
+            break;
+        case(Stat::SPECIAL_DEFENSE):
+            currentStage = aiBval.spDefStg;
+            break;
+        case(Stat::SPEED):
+            currentStage = aiBval.spdStg;
+            break;
+        case(Stat::ACCURACY):
+            currentStage = aiBval.accStg;
+            break;
+        case(Stat::EVASION):
+            currentStage = aiBval.evaStg;
+            break;
+        default:
+            ailog("Error getting stat stage");
+            return false;
+    }
+    if(comparator == PARA_UNDER) {
+        return currentStage < value;
+    }else if(comparator == PARA_EQUAL) {
+        return currentStage == value;
+    } else if(comparator == PARA_OVER) {
+        return currentStage > value;
+    }
+    ailog("error comparing stat stages");
+    return false;
+}
+
+// defaults to CHECK_ATTACK
+// check condition (slp, psn, par, brn)
+bool AI_IfCond(BattleContext *bc, AiContext *ac, int condition, bool target = false) {
+    PokeClient pc;
+    if(target) {
+        pc = ac->target;
+    } else {
+        pc = ac->self;
+    }
+    return pc.team[pc.battler].bVal.condition & condition;
+}
+// defaults to CHECK_ATTACK
+// check move effect mask like aqua ring or leech seed
+bool AI_IfMoveEffect(BattleContext *bc, AiContext *ac, int moveEffect, bool target = false) {
+    PokeClient pc;
+    if(target) {
+        pc = ac->target;
+    } else {
+        pc = ac->self;
+    }
+    return pc.team[pc.battler].bVal.moveEffectsMask & moveEffect;
+}
+// defaults to CHECK_ATTACK
+// check volatile conditions like confusion 
+bool AI_IfVolCondition(BattleContext *bc, AiContext *ac, int volCondition, bool target = false) {
+    PokeClient pc;
+    if(target) {
+        pc = ac->target;
+    } else {
+        pc = ac->self;
+    }
+    return pc.team[pc.battler].bVal.volConditions & volCondition;
+}
+
+// defaults to IF_FIRST_DEFENCE
+bool AI_IfFirst(BattleContext *bc, AiContext *ac, bool target = true) {
+    if(determineOrder(bc)) {
+        // attacker goes first
+        return !target;
+    } else {
+        // defender goes first
+        return target;
+    }
+
+}
 int AI_DamageCalc(BattleContext *bc, AiContext *ac, Move move, int loss = 100) {
 
     return calcDamage(bc, move, 1, loss);
@@ -97,7 +193,9 @@ int AI_CompPowerCalc(BattleContext *bc, AiContext *ac, int *damage) {
     }
     return maxDamage;
 }
-
+// sets ac.currentTypeAdvantage to effectiveness value
+// makes an attack of base power 40 with current move's typing
+// returns a damage value, one of QUAD_EFFECTIVE, SUPER_EFFECTIVE, NORMAL_EFFECTIVE, NOT_EFFECTIVE, QUAD_NOT_EFFECTIVE, IMMUNE_EFFECTIVE
 static void AI_CheckTypeAdvantage(BattleContext *bc, AiContext *ac) {
     int damage = NORMAL_EFFECTIVE;
     damage = getTypeMultiplier(bc, ac->self.team[ac->self.battler].moveset[ac->currentIndex], damage);
@@ -110,6 +208,7 @@ static void AI_CheckTypeAdvantage(BattleContext *bc, AiContext *ac) {
     } else if(damage == STAB_EFFECTIVE / 4) {
         damage = QUAD_NOT_EFFECTIVE;
     }
+    // TODO needs flag for certain no-hit scenarios 
     ac->currentTypeAdvantage = damage;
 }
 static void AI_CompPower(BattleContext *bc, AiContext *ac) {
@@ -183,6 +282,15 @@ static bool AI_DoesMoveKo(BattleContext *bc, AiContext *ac) {
         }
     }
     return false;
+}
+
+// only checks opponent's (player/defence's) last move
+bool AI_CheckPreviousMoveType(BattleContext *bc, AiContext *ac, DamageType dmgTyp, bool equality = true) {
+    if(bc->defender.previouslySelectedMove.defend == dmgTyp) {
+        return equality; // if equal, return true if equality is true
+    } else {
+        return !equality; // if not equal, return true if equality is false
+    }
 }
 // returns the selected command code to do 
 void processAI(BattleContext *bc) {
@@ -294,8 +402,10 @@ bool AI_DEC12(AiContext *ac) {
 Weather AI_CheckWeather(BattleContext *bc) {
     return bc->weather;
 }
+
+// Check ability, defaults to returning player's (defence) ability
 AbilityId AI_CheckAbility(BattleContext *bc, AiContext *ac, bool target = true) {
-    // update to work correctly
+    // TODO: update to work correctly, don't forget to notify AI of ability usage
     // needs to pick randomly between abilities if the 
     // target has two and we don't already know which ability
     // the target has
@@ -390,7 +500,7 @@ bool AI_BasicDamageStart(BattleContext *bc, AiContext *ac) {
 
 bool AI_BasicSeq(BattleContext *bc, AiContext *ac) {
     ac->lossCalcOn = false;
-    // missing horn drill and fissure calcs
+    // TODO: missing horn drill and fissure calcs
     AI_CompPower(bc, ac);
     if(ac->currentPowerFlag == COMP_POWER_NONE) {
         return AI_BasicDamageEnd(bc, ac);
@@ -406,15 +516,63 @@ bool AI_CheckEffect(BattleContext *bc, AiContext *ac) {
     switch(ac->self.team[ac->self.battler].moveset[ac->currentIndex].effect) {
         case(BATTLE_EFFECT_STATUS_POISON): // 66
             return AI_BasicPoison(bc, ac); 
+        case(BATTLE_EFFECT_ATK_DOWN): // 18
+        case(BATTLE_EFFECT_ATK_DOWN_2): // 58
+            return AI_BasicAttackDown(bc, ac);
         case(BATTLE_EFFECT_DEF_DOWN_2): // 59
             return AI_BasicDefenseDown(bc, ac); 
         case(BATTLE_EFFECT_ACC_DOWN): //23
             return AI_BasicAccuracyDown(bc, ac);
+        case(BATTLE_EFFECT_EVA_UP): // 16
+            return AI_BasicEvaUp(bc, ac);
+        case(BATTLE_EFFECT_SET_HP_EQUAL_TO_USER):
+            return AI_BasicRiskyDamage(bc, ac);
         default:
             return true;
     }
 }
-
+bool AI_BasicRiskyDamage(BattleContext *bc, AiContext *ac) {
+    AI_CheckTypeAdvantage(bc, ac);
+    if(ac->currentTypeAdvantage == IMMUNE_EFFECTIVE) {
+        return AI_DEC10(ac);
+    }
+    AbilityId abi = AI_CheckAbility(bc, ac); // get enemy ability
+    if(abi==WONDER_GUARD) {
+        AbilityId abi2 = AI_CheckAbility(bc, ac, false); // get our ability
+        if(abi2 == MOLD_BREAKER) { // pokemon programmers in shambles over this ability
+            return true; 
+        }
+        if(ac->currentTypeAdvantage == SUPER_EFFECTIVE) {
+            return true;
+        }
+        if(ac->currentTypeAdvantage == QUAD_EFFECTIVE) {
+            return true;
+        }
+        return AI_DEC10(ac);
+    } else {
+        return true;
+    }
+}
+bool AI_BasicEvaUp(BattleContext *bc, AiContext *ac) {
+    AbilityId abi = AI_CheckAbility(bc, ac);
+    if(abi == NO_GUARD) {
+        return AI_DEC10(ac);
+    }
+    AbilityId abi2 = AI_CheckAbility(bc, ac, false);
+    if(abi == NO_GUARD) {
+        return AI_DEC10(ac);
+    }
+    if(abi != SIMPLE){
+        if(AI_IfPara(bc, ac, PARA_EQUAL, Stat::EVASION, 12)) {
+            return AI_DEC10(ac);
+        }
+        return true;
+    }
+    if(AI_IfPara(bc, ac, PARA_OVER, Stat::EVASION, 8)){
+        return AI_DEC10(ac);
+    }
+    return true;
+}
 bool AI_BasicPoison(BattleContext *bc, AiContext *ac) {
     if(ac->target.team[ac->target.battler].info.primaryType == Type::Steel || ac->target.team[ac->target.battler].info.primaryType == Type::Poison) {
         return AI_DEC10(ac);
@@ -469,6 +627,18 @@ bool AI_BasicAccuracyDown(BattleContext *bc, AiContext *ac) {
     }
     AbilityId abiTarget = AI_CheckAbility(bc, ac);
     if(abiTarget == NO_GUARD || abiTarget == KEEN_EYE) {
+        return AI_DEC10(ac);
+    }
+    return AI_BasicClearBody(bc, ac);
+}
+
+bool AI_BasicAttackDown(BattleContext *bc, AiContext *ac) {
+    if(AI_IfPara(bc, ac, 1, Stat::ATTACK, 0, true)) {
+        // check defence atk stat
+        return AI_DEC10(ac);
+    }
+    AbilityId aid = AI_CheckAbility(bc, ac);
+    if(aid == AbilityId::HYPER_CUTTER) {
         return AI_DEC10(ac);
     }
     return AI_BasicClearBody(bc, ac);
@@ -560,6 +730,8 @@ bool AI_ExpertSeq(BattleContext *bc, AiContext *ac) {
     switch(ac->self.team[ac->self.battler].moveset[ac->currentIndex].effect) {
         case(BATTLE_EFFECT_STATUS_POISON): // 66
             return AI_ExpertPoison(bc, ac);
+        case(BATTLE_EFFECT_ATK_DOWN_2): // 58
+            return AI_ExpertAttackDown(bc, ac);
         case(BATTLE_EFFECT_DEF_DOWN_2): // 59
             return AI_ExpertDefenceDown(bc, ac);
         case(BATTLE_EFFECT_ACC_DOWN): // 23
@@ -568,10 +740,77 @@ bool AI_ExpertSeq(BattleContext *bc, AiContext *ac) {
         case(BATTLE_EFFECT_HIGH_CRITICAL_BURN_HIT):
         case(BATTLE_EFFECT_HIGH_CRITICAL_POISON_HIT):
             return AI_ExpertHighCritical(bc, ac);
+        case(BATTLE_EFFECT_SET_HP_EQUAL_TO_USER):
+            return AI_ExpertEndeavor(bc, ac);
         default:
             return true;
     }
 }
+bool AI_ExpertAttackDown(BattleContext *bc, AiContext *ac) {
+    if(AI_IfPara(bc, ac, 1, Stat::DEFENSE, 6, true)) {
+        return AI_ExpertAttackDown_2(bc, ac);
+    }
+    AI_INCDEC(ac, -1);
+    if(AI_IfHpOver(bc, ac, 90)) {
+        return AI_ExpertAttackDown_1(bc, ac);
+    }
+    AI_INCDEC(ac, -1);
+    return AI_ExpertAttackDown_1(bc, ac);
+}
+bool AI_ExpertAttackDown_1(BattleContext *bc, AiContext *ac) {
+    if(AI_IfPara(bc, ac, 1, Stat::ATTACK, 6, true)) {
+        return AI_ExpertAttackDown_2(bc, ac);
+    }
+    if(AI_IfRndUnder(bc, 50)) {
+        return AI_ExpertAttackDown_2(bc, ac);
+    }
+    AI_INCDEC(ac, -2);
+    return AI_ExpertAttackDown_2(bc, ac);
+}
+bool AI_ExpertAttackDown_2(BattleContext *bc, AiContext *ac) {
+    if(AI_IfHpOver(bc, ac, 70, true)) {
+        return AI_ExpertAttackDown_3(bc, ac);
+    }
+    AI_INCDEC(ac, -2);
+    return AI_ExpertAttackDown_3(bc, ac);
+}
+bool AI_ExpertAttackDown_3(BattleContext *bc, AiContext *ac) {
+    // need to implement lastWazaKind
+    if(AI_CheckPreviousMoveType(bc, ac, DamageType::SPECIAL, false)) {
+        return true;
+    }
+    if(AI_IfRndUnder(bc, 128)) {
+        return true;
+    }
+    AI_INCDEC(ac, -2);
+    return true;
+}
+bool AI_ExpertEndeavor(BattleContext *bc, AiContext *ac) {
+    if(AI_IfHpUnder(bc, ac, 70, true)) {
+        return AI_ExpertEndeavor_2(bc, ac);
+    }
+    if(AI_IfFirst(bc, ac)) {
+        return AI_ExpertEndeavor_1(bc, ac);
+    }
+    if(AI_IfHpOver(bc, ac, 40)) {
+        return AI_ExpertEndeavor_2(bc, ac);
+    }
+    AI_INCDEC(ac, 1);
+    return true; // aiend
+}
+
+bool AI_ExpertEndeavor_1(BattleContext *bc, AiContext *ac) {
+    if(AI_IfHpOver(bc, ac, 50)) {
+        return AI_ExpertEndeavor_2(bc, ac);
+    }
+    AI_INCDEC(ac, 1);
+    return true; // aiend
+}
+bool AI_ExpertEndeavor_2(BattleContext *bc, AiContext *ac) {
+    AI_INCDEC(ac, -1);
+    return true; // aiend
+}
+
 bool AI_ExpertHighCritical_1(BattleContext *bc, AiContext *ac) {
     ailog("using rand for high critical_1 128");
     if(AI_IfRndUnder(bc, 128)){
@@ -744,4 +983,112 @@ bool AI_ExpertDefenceDown_End(BattleContext *bc, AiContext *ac){
     return true;
 }
 
+// Evasion up (16)
 
+bool AI_ExpertEvasionUp(BattleContext *bc, AiContext *ac) {
+    if(AI_IfHpUnder(bc, ac, 90)) {
+        return AI_ExpertEvasionUp_1(bc, ac);
+    }
+    if(AI_IfRndUnder(bc, 100)) {
+        return AI_ExpertEvasionUp_1(bc, ac);
+    }
+    AI_INCDEC(ac, 3);
+    return AI_ExpertEvasionUp_1(bc, ac);
+}
+
+bool AI_ExpertEvasionUp_1(BattleContext *bc, AiContext *ac) {
+    if(AI_IfPara(bc, ac, 0, Stat::EVASION, 9)){
+        return AI_ExpertEvasionUp_2(bc, ac);
+    };
+    if(AI_IfRndUnder(bc, 128)){
+        return AI_ExpertEvasionUp_2(bc, ac);
+    }
+    AI_INCDEC(ac, -1);
+    return AI_ExpertEvasionUp_2(bc, ac);
+}
+
+bool AI_ExpertEvasionUp_2(BattleContext *bc, AiContext *ac) {
+    if(!AI_IfCond(bc, ac, MON_CONDITION_TOXIC, true)){
+        return AI_ExpertEvasionUp_5(bc, ac);
+    }
+    if(AI_IfHpOver(bc, ac, 50)) {
+        return AI_ExpertEvasionUp_4(bc, ac);
+    }
+    if(AI_IfRndUnder(bc, 80)) {
+        return AI_ExpertEvasionUp_5(bc, ac);
+    }
+    return AI_ExpertEvasionUp_4(bc, ac);
+}
+
+bool AI_ExpertEvasionUp_4(BattleContext *bc, AiContext *ac) {
+    if(AI_IfRndUnder(bc, 50)) {
+        return AI_ExpertEvasionUp_5(bc, ac);
+    }
+    AI_INCDEC(ac, 3);
+    return AI_ExpertEvasionUp_5(bc, ac);
+}
+
+bool AI_ExpertEvasionUp_5(BattleContext *bc, AiContext *ac) {
+    if(!AI_IfMoveEffect(bc, ac, MOVE_EFFECT_LEECH_SEED, true)) {
+        return AI_ExpertEvasionUp_6(bc, ac);
+    }
+    if(AI_IfRndUnder(bc, 70)) {
+        return AI_ExpertEvasionUp_6(bc, ac);
+    }
+    AI_INCDEC(ac, 3);
+    return AI_ExpertEvasionUp_6(bc, ac);
+}
+
+bool AI_ExpertEvasionUp_6(BattleContext *bc, AiContext *ac) {
+    if(!AI_IfMoveEffect(bc, ac, MOVE_EFFECT_INGRAIN)) {
+        if(AI_IfMoveEffect(bc, ac, MOVE_EFFECT_AQUA_RING)) {
+            if(AI_IfRndUnder(bc, 128)) {
+                return AI_ExpertEvasionUp_7(bc, ac);
+            }
+            AI_INCDEC(ac, 2);
+        }
+        return AI_ExpertEvasionUp_7(bc, ac);
+    }
+    if(AI_IfRndUnder(bc, 128)) {
+        return AI_ExpertEvasionUp_7(bc, ac);
+    }
+    AI_INCDEC(ac, 2);
+    return AI_ExpertEvasionUp_7(bc, ac);
+}
+
+bool AI_ExpertEvasionUp_7(BattleContext *bc, AiContext *ac) {
+    if(AI_IfVolCondition(bc, ac, VOLATILE_CONDITION_CURSE, true)) {
+        if(AI_IfRndUnder(bc, 70)) {
+            return AI_ExpertEvasionUp_8(bc, ac);
+        }
+        AI_INCDEC(ac, 3);
+    }
+    return AI_ExpertEvasionUp_8(bc, ac);
+}
+
+bool AI_ExpertEvasionUp_8(BattleContext *bc, AiContext *ac) {
+    if(AI_IfHpOver(bc, ac, 70)) {
+        return AI_ExpertEvasionUp_end(bc, ac);
+    }
+    if(AI_IfPara(bc, ac, 1, Stat::EVASION, 6)) {
+        return AI_ExpertEvasionUp_end(bc, ac);
+    }
+    if(AI_IfHpUnder(bc, ac, 40)) {
+        return AI_ExpertEvasionUp_9(bc, ac);
+    }
+    if(AI_IfHpUnder(bc, ac, 40, true)) {
+        return AI_ExpertEvasionUp_9(bc, ac);
+    }
+    if(AI_IfRndUnder(bc, 70)) {
+        return AI_ExpertEvasionUp_end(bc, ac);
+    }
+    return AI_ExpertEvasionUp_9(bc, ac);
+}
+bool AI_ExpertEvasionUp_9(BattleContext *bc, AiContext *ac) {
+    AI_INCDEC(ac, -2);
+    return AI_ExpertEvasionUp_end(bc, ac);
+}
+
+bool AI_ExpertEvasionUp_end(BattleContext *bc, AiContext *ac) {
+    return true;
+}

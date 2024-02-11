@@ -17,35 +17,39 @@
 #define AI_BASIC (1 << 0)
 #define AI_STRONG (1 << 1)
 #define AI_EXPERT (1 << 2)
+
+#define PARA_UNDER 0
+#define PARA_EQUAL 1
+#define PARA_OVER 2
 static	const int NoCompPowerSeqNo[]={
-	7,
-	8,
-	39,
-	75,
-	80,
-	145,
-	151,
-	161,
+	7, // BATTLE_EFFECT_HALVE_DEFENSE (explosion)
+	8, // BATTLE_EFFECT_RECOVER_DAMAGE_SLEEP
+	39, // BATTLE_EFFECT_CHARGE_TURN_HIGH_CRIT
+	75, // BATTLE_EFFECT_CHARGE_TURN_HIGH_CRIT_FLINCH
+	80, // BATTLE_EFFECT_RECHARGE_AFTER
+	145, // BATTLE_EFFECT_CHARGE_TURN_DEF_UP
+	151, // BATTLE_EFFECT_SKIP_CHARGE_TURN_IN_SUN
+	161, // BATTLE_EFFECT_SPIT_UP
 	170, // focus punchie
-	182,
-	190,
-	248,
-	269,
+	182, // BATTLE_EFFECT_LOWER_OWN_ATK_AND_DEF
+	190, // BATTLE_EFFECT_DECREASE_POWER_WITH_LESS_USER_HP
+	248, // BATTLE_EFFECT_HIT_FIRST_IF_TARGET_ATTACKING
+	269, // BATTLE_EFFECT_RECOIL_HALF
 	0xffff,
 };
 
 static	const int OkCompPowerSeqNo[]={
-	135,		
-	219,		
-	222,		
-	268,		
-	41,			
-	87,			
-	88,			
-	121,		
-	123,		
-	130,		
-	196,		
+	135, // BATTLE_EFFECT_RANDOM_POWER_BASED_ON_IVS	
+	219, // BATTLE_EFFECT_POWER_BASED_ON_LOW_SPEED	
+	222, // BATTLE_EFFECT_NATURAL_GIFT		
+	268, // BATTLE_EFFECT_JUDGEMENT	
+	41, // BATTLE_EFFECT_40_DAMAGE_FLAT
+	87,	// BATTLE_EFFECT_LEVEL_DAMAGE_FLAT	
+	88,	// BATTLE_EFFECT_RANDOM_DAMAGE_1_TO_150_LEVEL
+	121, // BATTLE_EFFECT_POWER_BASED_ON_FRIENDSHIP		
+	123, // BATTLE_EFFECT_POWER_BASED_ON_LOW_FRIENDSHIP		
+	130, // BATTLE_EFFECT_10_DAMAGE_FLAT		
+	196, // BATTLE_EFFECT_INCREASE_POWER_WITH_WEIGHT
 	0xffff,
 };
 
@@ -67,6 +71,7 @@ bool AI_IfRndUnder(BattleContext *bc, int value);
 bool AI_IfRndOver(BattleContext *bc, int value);
 bool AI_IfHpUnder(BattleContext *bc, AiContext *ac, int value, bool target);
 bool AI_IfHpOver(BattleContext *bc, AiContext *ac, int value, bool target);
+bool AI_IfPara(BattleContext *bc, AiContext *ac, int comparator, Stat stg, int value, bool target);
 int AI_DamageCalc(BattleContext *bc, AiContext *ac, Move move, int loss);
 int AI_CompPowerCalc(BattleContext *bc, AiContext *ac, int *damage);
 static bool AI_DoesMoveKo(BattleContext *bc, AiContext *ac);
@@ -85,11 +90,14 @@ bool AI_BasicDamage(BattleContext *bc, AiContext *ac);
 bool AI_BasicDamageStart(BattleContext *bc, AiContext *ac);
 bool AI_BasicSeq(BattleContext *bc, AiContext *ac);
 bool AI_CheckEffect(BattleContext *bc, AiContext *ac);
+bool AI_BasicEvaUp(BattleContext *bc, AiContext *ac);
 bool AI_BasicPoison_NoLeafGuard(BattleContext *bc, AiContext *ac);
 bool AI_BasicPoison_NoHydration(BattleContext *bc, AiContext *ac);
+bool AI_BasicAttackDown(BattleContext *bc, AiContext *ac);
 bool AI_BasicDefenseDown(BattleContext *bc, AiContext *ac);
 bool AI_BasicAccuracyDown(BattleContext *bc, AiContext *ac);
 bool AI_BasicClearBody(BattleContext *bc, AiContext *ac);
+bool AI_BasicRiskyDamage(BattleContext *bc, AiContext *ac);
 bool AI_ExpertSeq(BattleContext *bc, AiContext *ac);
 bool AI_ExpertAccuracyDown(BattleContext *bc, AiContext *ac);
 bool AI_ExpertAccuracyDown_2(BattleContext *bc, AiContext *ac);
@@ -121,6 +129,23 @@ bool AI_StrongKO2(BattleContext *bc, AiContext *ac);
 bool AI_StrongEnd(BattleContext *bc, AiContext *ac);
 bool AI_ExpertHighCritical(BattleContext *bc, AiContext *ac);
 bool AI_ExpertHighCritical_1(BattleContext *bc, AiContext *ac);
+bool AI_ExpertEvasionUp(BattleContext *bc, AiContext *ac);
+bool AI_ExpertEvasionUp_1(BattleContext *bc, AiContext *ac);
+bool AI_ExpertEvasionUp_2(BattleContext *bc, AiContext *ac);
+bool AI_ExpertEvasionUp_4(BattleContext *bc, AiContext *ac);
+bool AI_ExpertEvasionUp_5(BattleContext *bc, AiContext *ac);
+bool AI_ExpertEvasionUp_6(BattleContext *bc, AiContext *ac);
+bool AI_ExpertEvasionUp_7(BattleContext *bc, AiContext *ac);
+bool AI_ExpertEvasionUp_8(BattleContext *bc, AiContext *ac);
+bool AI_ExpertEvasionUp_9(BattleContext *bc, AiContext *ac);
+bool AI_ExpertEvasionUp_end(BattleContext *bc, AiContext *ac);
+bool AI_ExpertEndeavor(BattleContext *bc, AiContext *ac);
+bool AI_ExpertEndeavor_1(BattleContext *bc, AiContext *ac);
+bool AI_ExpertEndeavor_2(BattleContext *bc, AiContext *ac);
+bool AI_ExpertAttackDown(BattleContext *bc, AiContext *ac);
+bool AI_ExpertAttackDown_1(BattleContext *bc, AiContext *ac);
+bool AI_ExpertAttackDown_2(BattleContext *bc, AiContext *ac);
+bool AI_ExpertAttackDown_3(BattleContext *bc, AiContext *ac);
 
 
 #endif /*TR_AI_H*/

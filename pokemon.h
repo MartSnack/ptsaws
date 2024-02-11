@@ -11,6 +11,8 @@
 #define ITEM_SITRUS_BERRY 1
 #define ITEM_ORAN_BERRY 2
 #define ITEM_PECHA_BERRY 3
+#define ITEM_CHERI_BERRY 4
+#define ITEM_PERSIM_BERRY 5
 
 #define RANGE_TARGET 0
 #define RANGE_SELF 1
@@ -43,6 +45,12 @@ enum class MoveId {
     SCREECH,
     POISON_GAS,
     TACKLE,
+    QUICK_ATTACK,
+    WING_ATTACK,
+    DOUBLE_TEAM,
+    ENDEAVOR,
+    SPARK,
+    CHARM,
 };
 enum class DamageType:int {
     NONE,
@@ -98,6 +106,10 @@ enum AbilityId {
     NO_GUARD,
     KEEN_EYE,
     INNER_FOCUS,
+    INTIMIDATE,
+    SIMPLE,
+    RUN_AWAY,
+    HYPER_CUTTER,
 
 };
 // note that we really only care what stat nature is reducing
@@ -134,6 +146,8 @@ enum Mons {
     MONFERNO,
     SKUNTANK,
     ZUBAT,
+    STARAVIA,
+    PACHIRISU,
 };
 
 
@@ -220,4 +234,5 @@ class Ability{
 
 // fight setup
 BattleContext setupJupiterFight(unsigned long startingSeed);
+BattleContext setupVarFight(unsigned long startingSeed);
 #endif /* POKEMON_H_ */

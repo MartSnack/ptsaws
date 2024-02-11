@@ -61,18 +61,35 @@ std::map<Type, std::map<Type, float>> typeMap = {
 
 };
 
-PokeClient::PokeClient(void): selectedMove() {
+PokeClient::PokeClient(void): previouslySelectedMove() {
     sideConditions = 0;
     safeGuardTurns = 0;
     mistTurns = 0;
     isWinner = false;
+    triggers = 0;
 }
-int modifyStat(int base, int stage){
+
+void PokeClient::pokeSwitch(int nextBattler) {
+    battler = nextBattler;
+    Pokemon& p = team[battler];
+    p.sendOut(); // refresh
+    if(p.cAbility == AbilityId::INTIMIDATE) {
+        triggers |= TRIGGER_INTIMIDATE;
+    }
+}
+int modifyStatValue(int base, int stage){
     int interm = base * StatBonusByStage[stage].numerator;
     return interm / StatBonusByStage[stage].denominator;
 }
+
 int calcSpeed(PokeClient *pc) {
-    int speed = modifyStat(pc->team[pc->battler].cSpd, pc->team[pc->battler].bVal.spdStg);
+    int speed = modifyStatValue(pc->team[pc->battler].cSpd, pc->team[pc->battler].bVal.spdStg);
+    if(pc->team[pc->battler].bVal.condition & MON_CONDITION_PARALYSIS) {
+        if(4 & DEBUG) {
+            std::cout << "Reducing speed due to paralysis" << std::endl;
+        }
+        speed = speed/4; // paralysis reduction occurs after staged increases
+    }
     return speed;
 }
 int getPriorityScore(PokeClient *pc) {
@@ -88,7 +105,8 @@ int getPriorityScore(PokeClient *pc) {
     }
     return priorityScore;
 }
-void determineOrder(BattleContext *bc) {
+//BattleSystem_CompareBattlerSpeed
+bool determineOrder(BattleContext *bc) {
     bool attackerGoesFirst = true;
     int priorityScore1 = getPriorityScore(&bc->attacker);
     int priorityScore2 = getPriorityScore(&bc->defender);
@@ -106,12 +124,7 @@ void determineOrder(BattleContext *bc) {
     } else {
         attackerGoesFirst = false;
     }
-    if(!attackerGoesFirst) {
-        // need to switch current order
-        PokeClient pc = bc->attacker;
-        bc->attacker = bc->defender;
-        bc->defender = pc;
-    }
+    return attackerGoesFirst;
 }
 int getCritStage(Move move, BattleContext *bc){
     int stage = bc->attacker.team[bc->attacker.battler].bVal.critStg;
@@ -144,37 +157,55 @@ int calcDamage(BattleContext *bc, Move move, int crit = 1, int randomRoll = 100)
         cAtkStat = bc->attacker.team[bc->attacker.battler].cAtk;
         if(bc->attacker.team[bc->attacker.battler].bVal.atkStg < 6 && crit>1){
             // we crit, so ignore lowered atk stage
-            cAtkStat = modifyStat(cAtkStat, 6);
+            cAtkStat = modifyStatValue(cAtkStat, 6);
         } else {
-            cAtkStat = modifyStat(cAtkStat, bc->attacker.team[bc->attacker.battler].bVal.atkStg);
+            cAtkStat = modifyStatValue(cAtkStat, bc->attacker.team[bc->attacker.battler].bVal.atkStg);
         }
     } else {
         cAtkStat = bc->attacker.team[bc->attacker.battler].cSpAtk;
         if(bc->attacker.team[bc->attacker.battler].bVal.spAtkStg < 6 && crit>1){
             // we crit, so ignore lowered atk stage
-            cAtkStat = modifyStat(cAtkStat, 6);
+            cAtkStat = modifyStatValue(cAtkStat, 6);
         } else {
-            cAtkStat = modifyStat(cAtkStat, bc->attacker.team[bc->attacker.battler].bVal.spAtkStg);
+            cAtkStat = modifyStatValue(cAtkStat, bc->attacker.team[bc->attacker.battler].bVal.spAtkStg);
         }
     }
     if( move.defend ==  DamageType::PHYSICAL) {
         cDefStat = bc->defender.team[bc->defender.battler].cDef;
         if(bc->defender.team[bc->defender.battler].bVal.defStg > 6 && crit > 1) {
             // ignore higher defense on crit
-            cDefStat = modifyStat(cDefStat, 6);
+            cDefStat = modifyStatValue(cDefStat, 6);
         } else {
-            cDefStat = modifyStat(cDefStat, bc->defender.team[bc->defender.battler].bVal.defStg);
+            cDefStat = modifyStatValue(cDefStat, bc->defender.team[bc->defender.battler].bVal.defStg);
         }
     } else {
         cDefStat = bc->defender.team[bc->defender.battler].cSpDef;
         if(bc->defender.team[bc->defender.battler].bVal.spDefStg > 6 && crit > 1) {
             // ignore higher defense on crit
-            cDefStat = modifyStat(cDefStat, 6);
+            cDefStat = modifyStatValue(cDefStat, 6);
         } else {
-            cDefStat = modifyStat(cDefStat, bc->defender.team[bc->defender.battler].bVal.spDefStg);
+            cDefStat = modifyStatValue(cDefStat, bc->defender.team[bc->defender.battler].bVal.spDefStg);
         }
     }
     int movePower = move.power;
+    if(movePower == 1) {
+        bc->cDmg = 0;
+        bc->cPwr = 0;
+        // move has variable (or flat) power
+        // endeavor, gyro ball, crush grip, dragon rage, etc.
+        if(applyEffect(move, bc)){
+            // success
+            if(bc->cDmg > 0) {
+                // current damage was set, move deals flat damage (no crits)
+                return bc->cDmg;
+            } else {
+                // if cDmg wasn't set, power must be. Set move power to the variable power result 
+                movePower = bc->cPwr; 
+            }
+        } else {
+            return 0; // move failed, return 0 for damage 
+        }
+    }
     if(move.moveType == Type::Fire && bc->attacker.team[bc->attacker.battler].cAbility == AbilityId::BLAZE && bc->attacker.team[bc->attacker.battler].bVal.bHp <= bc->attacker.team[bc->attacker.battler].cHp/3){
         movePower = movePower * 150 / 100;
     }
@@ -224,8 +255,12 @@ void dealDamage(Pokemon *p,  int damage) {
     if((p->bVal.bHp <= (p->cHp / 2)) && p->bVal.bHp > 0) {
         // trigger effects that occur below half health
         if(p->bVal.item == ITEM_ORAN_BERRY) {
+            int oldHp = p->bVal.bHp;
             heal(p, 10);
             p->bVal.item = ITEM_NONE; // consumed
+            if(DEBUG) {
+                std::cout << "\t\tOran berry activates: " << p->info.name << " heals " <<  oldHp << "->" << p->bVal.bHp << std::endl;
+            }
         } else if(p->bVal.item == ITEM_SITRUS_BERRY) {
             int oldHp = p->bVal.bHp;
             heal(p, p->cHp/4);
@@ -237,18 +272,18 @@ void dealDamage(Pokemon *p,  int damage) {
     }
 }
 bool preMove(Move move, BattleContext *bc) {
+    bool statusDisrupted = checkStatusDisruption(bc, move); // paralysis, sleep, flinch
+    if(statusDisrupted) {
+        return false;
+    }
+
     if(bc->attacker.team[bc->attacker.battler].bVal.bHp == 0) {
         return false; // im dead
     }
     if(bc->defender.team[bc->defender.battler].bVal.bHp == 0 && move.range == RANGE_TARGET) {
         return false; // no valid target
     }
-    if(bc->attacker.team[bc->attacker.battler].bVal.turnsTaunted > 0) {
-        // we got taunted :(((
-        if(move.power == 0) {
-            return false;
-        }
-    }
+    bc->moveWasSuccessful = true;
     return true;
 }
 bool postMove(Move move, BattleContext *bc){
@@ -328,6 +363,8 @@ bool useMove(Move move, BattleContext *bc) {
     if(!success) {
         log("\tMove Failed");
     }
+    // afterMove (technically should occur after any status disruption as well but we have a different control flow than the original code)
+    updateMoveBuffers(bc, move);
     return success;
 }
 bool useItem(BattleContext *bc, int item) {
@@ -349,10 +386,39 @@ bool useItem(BattleContext *bc, int item) {
 void setupBattle(BattleContext *bc) {
     bc->turnNumber = 0;
     bc->weather = Weather::None;
+    bc->moveWasSuccessful = false;
+}
+bool checkStatusDisruption(BattleContext *bc, Move move) {
+    PokeClient attacker = bc->attacker;
+    Pokemon attackingPokemon = attacker.team[attacker.battler];
+    if(bc->attacker.team[bc->attacker.battler].bVal.turnsTaunted > 0) {
+        // we got taunted :(((
+        if(move.power == 0) {
+            return true;
+        }
+    }
+    if(attackingPokemon.bVal.condition & MON_CONDITION_PARALYSIS) {
+        if(attackingPokemon.cAbility != AbilityId::MAGIC_GUARD) {
+            if(advanceSeed(bc) % 4 == 0) {
+                return true; // disrupted
+            }
+        }
+    }
+
+    return false;
+}
+void updateMoveBuffers(BattleContext *bc, Move move) {
+    if(bc->moveWasSuccessful) {
+        bc->attacker.previouslySelectedMove = move;
+    }
+}
+void resetContext(BattleContext *bc) {
+    bc->moveWasSuccessful = false;
 }
 void executeCommand(BattleContext *bc) {
 
     if(bc->attacker.command & COMMAND_MOVE) {
+
         int moveNum = log2(bc->attacker.command);
         bool success = useMove(bc->attacker.team[bc->attacker.battler].moveset[moveNum], bc);
         if(success) {
@@ -360,6 +426,7 @@ void executeCommand(BattleContext *bc) {
             advanceSeed(bc);
             advanceSeed(bc);
         }
+
     } else if(bc->attacker.command & COMMAND_USE_ITEM) {
         useItem(bc, bc->attacker.command);
     }
@@ -437,13 +504,38 @@ void triggerEndTurnConditions(PokeClient *p) {
 bool switchIn(PokeClient *pc) {
     for(int i = 0; i<6; i++) {
         if(pc->team[i].bVal.bHp > 0) {
-            pc->battler = i;
-            pc->team[i].sendOut(); // refresh all things
+            pc->pokeSwitch(i);
             log(pc->name + " sends out " + pc->team[i].info.name);
             return true;
         }
     }
     return false;
+}
+// doAttacker -> whether to trigger the attacker's effect or defenders
+// so that we don't have to do everything twice.
+bool preTurnEffects(BattleContext *bc, bool doAttacker) {
+    PokeClient *applyClient;
+    PokeClient *receiveClient;
+    if(doAttacker) {
+        applyClient = &bc->attacker;
+        receiveClient = &bc->defender;
+    } else {
+        applyClient = &bc->defender;
+        receiveClient = &bc->attacker;
+    }
+
+    if(applyClient->triggers & TRIGGER_INTIMIDATE) {
+        // doAttacker false, receive client is attacker
+        // so targetSelf true, because self == attacker 
+        modifyStat(!doAttacker, Stat::ATTACK, -1, bc);
+        // announce ability (intimidate)
+        applyClient->team[applyClient->battler].bVal.abilityKnownToAi = true;
+        if(DEBUG) {
+            std::cout << "Intimidate lowers " << logName(receiveClient->team[receiveClient->battler]) << " attack stat by 1" << std::endl;
+        }
+    }
+    applyClient->triggers = 0; // reset all triggers.  TODO: might need to not reset all of them
+    return true;
 }
 bool endOfTurn(BattleContext *bc) {
     bool shouldContinue = true;
@@ -481,7 +573,15 @@ bool endOfTurn(BattleContext *bc) {
 }
 // returns true if the battle should continue
 bool doTurn(BattleContext *bc) {
-    determineOrder(bc);
+    if(!determineOrder(bc)) {
+        // need to switch current order
+        PokeClient pc = bc->attacker;
+        bc->attacker = bc->defender;
+        bc->defender = pc;
+    }
+    preTurnEffects(bc, true); // attacker effects
+    preTurnEffects(bc, false); // defender effects
+
     // turn overall start advances 4
     log("Turn Starts > RNG Advances 4");
     advanceSeed(bc);

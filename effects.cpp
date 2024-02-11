@@ -105,7 +105,7 @@ bool applyBurn(Pokemon *p, BattleContext *bc) {
     return applyStatus(p, MON_CONDITION_BURN, bc);
 }
 bool applyPoison(Pokemon *p, BattleContext *bc) {
-    if(p->bVal.item & ITEM_PECHA_BERRY) {
+    if(p->bVal.item == ITEM_PECHA_BERRY) {
         if(DEBUG) {
             std::cout << "\tPecha Berry Prevents Poison" << std::endl;
         }
@@ -113,6 +113,20 @@ bool applyPoison(Pokemon *p, BattleContext *bc) {
         return true; // the poisoning effect still technically succeeds
     }
     return applyStatus(p, MON_CONDITION_POISON, bc);
+}
+bool applyParalysis(Pokemon *p, BattleContext *bc) {
+    // TODO: Condition application should check for mitigating items AFTER checking
+    // if the condition could even apply.  If you tried to paralyze a pokemon
+    // that was already posioned and had a cheri berry this would consume the 
+    // berry even though they can't even get paralyzed
+    if(p->bVal.item == ITEM_CHERI_BERRY) {
+        if(DEBUG) {
+            std::cout << "\tCheri Berry Prevents Paralysis" << std::endl;
+        }
+        p->bVal.item = 0; // consume cheri berry
+        return true; // the paralysis effect still technically succeeds
+    }
+    return applyStatus(p, MON_CONDITION_PARALYSIS, bc);
 }
 bool applyTaunt(Pokemon *p, BattleContext *bc) {
     if(p->bVal.turnsTaunted > 0) {
@@ -133,7 +147,15 @@ bool applyMist(BattleContext *bc) {
         bc->attacker.sideConditions |= SIDE_CONDITION_MIST;
         return true;
     }
-
+}
+bool applyEndeavor(BattleContext *bc) {
+    int aHp = bc->attacker.team[bc->attacker.battler].bVal.bHp;
+    int dHp = bc->defender.team[bc->defender.battler].bVal.bHp;
+    if(aHp < dHp){
+        bc->cDmg = dHp - aHp;
+        return true;
+    }
+    return false;
 }
 bool applyEffect(Move move, BattleContext *bc) {
     switch(move.effect) {
@@ -142,14 +164,20 @@ bool applyEffect(Move move, BattleContext *bc) {
             return applyBurn(&bc->defender.team[bc->defender.battler], bc);
         case BATTLE_EFFECT_STATUS_POISON:
             return applyPoison(&bc->defender.team[bc->defender.battler], bc);
+        case BATTLE_EFFECT_ATK_DOWN_2:
+            return modifyStat(false, Stat::ATTACK, -2, bc);
         case BATTLE_EFFECT_DEF_DOWN_2:
             return modifyStat(false, Stat::DEFENSE, -2, bc);
         case BATTLE_EFFECT_ACC_DOWN:
             return modifyStat(false, Stat::ACCURACY, -1, bc);
+        case BATTLE_EFFECT_EVA_UP:
+            return modifyStat(true, Stat::EVASION, 1, bc);
         case BATTLE_EFFECT_TAUNT:
             return applyTaunt(&bc->defender.team[bc->defender.battler], bc);
         case BATTLE_EFFECT_PREVENT_STAT_REDUCTION:
             return applyMist(bc);
+        case BATTLE_EFFECT_SET_HP_EQUAL_TO_USER:
+            return applyEndeavor(bc);
         default:
             return false;
     }
