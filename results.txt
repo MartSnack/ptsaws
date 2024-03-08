@@ -216,3 +216,22 @@ Grass encounter rate is different between days, the game is coded to increase or
 
 At lake verity seed 9629134 produces 2 shiny encounters
 w/ tid and sid of 10064 and 63631
+
+Starly fight triple quick attack
+
+Player won. Lowest hp -> 40 // Seed: 3321
+Player won. Lowest hp -> 48 // Seed: 15530 
+Player won. Lowest hp -> 46 // Seed: 29177 
+Player won. Lowest hp -> 47 // Seed: 31590 
+Player won. Lowest hp -> 47 // Seed: 41413 
+Player won. Lowest hp -> 46 // Seed: 58256 
+Player won. Lowest hp -> 51 // Seed: 60714 
+Player won. Lowest hp -> 47 // Seed: 74357 
+Player won. Lowest hp -> 46 // Seed: 84112 
+Player won. Lowest hp -> 46 // Seed: 99391 
+Player won. Lowest hp -> 47 // Seed: 106226
+Player won. Lowest hp -> 47 // Seed: 113191
+Player won. Lowest hp -> 45 // Seed: 126947
+Player won. Lowest hp -> 54 // Seed: 134278
+Player won. Lowest hp -> 44 // Seed: 145101
+Player won. Lowest hp -> 53 // Seed: 151335

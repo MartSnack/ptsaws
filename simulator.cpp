@@ -9,6 +9,8 @@
 #include <string>
 #include "pokemon.h"
 #include "battle.h"
+#include "tr_ai.h"
+
 // test comment
 struct Range {
     unsigned long start;
@@ -38,9 +40,13 @@ BattleReport simulate(unsigned long startingSeed, CommandList cList) {
 
     // this command doesn't matter, it gets replaced later
     bc.attacker.command = COMMAND_MOVE_SLOT_2; // attacker is us
-    // AI command does matter, it's the first move they make
-    // TODO: AI should actually calculate its first move here instead
-    bc.defender.command = COMMAND_MOVE_SLOT_3; // defender is them
+    bc.defender.command = COMMAND_MOVE_SLOT_2; // defender is them
+
+    // idk why but the seed advances 2 here
+    for(int i = 0; i < 2; i++){
+        advanceSeed(&bc);
+    }
+    processAI(&bc); // calculate which command to use on first turn
     bool shouldContinue = true;
     int i = 0;
     int command = 0;
@@ -114,8 +120,8 @@ int main(int argc, char* argv[]) {
     using std::chrono::duration;
     using std::chrono::milliseconds;
     auto t1 = high_resolution_clock::now();
-    // unsigned long end = 4294967295UL;
-    unsigned long end = 160000UL;
+    unsigned long end = 4294967295UL;
+    // unsigned long end = 1600000UL;
 
     int divisor = 16; // how many chunks to use
     int offset = 0; // how far to offset
@@ -126,11 +132,17 @@ int main(int argc, char* argv[]) {
         cList.commands[i] = 0;
     }
     cList.defaultCommand = COMMAND_MOVE_SLOT_2;
+    // cList.commands[0] = COMMAND_MOVE_SLOT_3;
+    // cList.commands[1] = COMMAND_MOVE_SLOT_3;
+    // cList.commands[2] = COMMAND_MOVE_SLOT_3;
     // cList.commands[1] = COMMAND_USE_ITEM_GUARD_SPEC;
-    // cList.commands[4] = COMMAND_USE_ITEM_HYPER_POTION;
+    // cList.commands[3] = COMMAND_USE_ITEM_HYPER_POTION;
+    // cList.commands[6] = COMMAND_USE_ITEM_HYPER_POTION;
+    // cList.commands[9] = COMMAND_USE_ITEM_HYPER_POTION;
+
     // simulate a specific seed
-    simulate(10052, cList);
-    return 0;
+    // simulate(201142, cList);
+    // return 0;
     for(i = 0; i < divisor; i++){
         ranges.push_back({i * chunkSize, (i+1) * chunkSize});
     }

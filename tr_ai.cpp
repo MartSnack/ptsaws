@@ -177,7 +177,7 @@ int AI_CompPowerCalc(BattleContext *bc, AiContext *ac, int *damage) {
             if(ac->lossCalcOn) {
                 loss = ac->damageLoss[i];
             } else {
-                loss = 100;
+                loss = 0;
             }
             damage[i] = AI_DamageCalc(bc, ac, ac->self.team[ac->self.battler].moveset[i], loss);
         } else {
@@ -198,7 +198,8 @@ int AI_CompPowerCalc(BattleContext *bc, AiContext *ac, int *damage) {
 // returns a damage value, one of QUAD_EFFECTIVE, SUPER_EFFECTIVE, NORMAL_EFFECTIVE, NOT_EFFECTIVE, QUAD_NOT_EFFECTIVE, IMMUNE_EFFECTIVE
 static void AI_CheckTypeAdvantage(BattleContext *bc, AiContext *ac) {
     int damage = NORMAL_EFFECTIVE;
-    damage = getTypeMultiplier(bc, ac->self.team[ac->self.battler].moveset[ac->currentIndex], damage);
+    int moveStatus = 0;
+    damage = getTypeMultiplier(bc, ac->self.team[ac->self.battler].moveset[ac->currentIndex], damage, &moveStatus);
     if(damage == STAB_EFFECTIVE * 2) {
         damage = SUPER_EFFECTIVE;
     } else if(damage == STAB_EFFECTIVE * 4) {
@@ -257,7 +258,7 @@ static bool AI_DoesMoveKo(BattleContext *bc, AiContext *ac) {
     if(ac->lossCalcOn) {
         loss = ac->damageLoss[ac->currentIndex];
     } else {
-        loss = 100;
+        loss = 0;
     }
     
 	no=0;
@@ -292,6 +293,67 @@ bool AI_CheckPreviousMoveType(BattleContext *bc, AiContext *ac, DamageType dmgTy
         return !equality; // if not equal, return true if equality is false
     }
 }
+bool AI_ShouldSwitch(BattleContext *bc, AiContext *ac){
+    int validOptions = 0;
+    for(int i=0;i<6;i++){
+        if(ac->self.team[i].bVal.bHp > 0) {
+            validOptions++;        
+        }
+    }
+    // valid options not counting current battler
+    if(validOptions > 1) {
+        // we have a valid switch option 
+        // perish song TODO
+        // wonder guard TODO
+        // only ineffective moves TODO
+        if(AI_HasAbsorbAbilityInParty(bc, ac)) {
+            return false;
+        }
+        if(AI_HasSuperEffectiveMove(bc, ac, false)) {
+            return false;
+        }
+        // heavily boosted TODO
+        // party member super effective TODO
+
+    }
+    return false;
+}
+bool AI_HasAbsorbAbilityInParty(BattleContext *bc, AiContext *ac) {
+    // could potentially use 2 random values, but only if the AI
+    // has an absorbing ability in their party and we hit them with
+    // a move they could possibly absorb
+    if(AI_HasSuperEffectiveMove(bc, ac, true) && advanceSeed(bc, "from absorb ability") % 3 != 0) {
+        return false;
+    }
+    return false; // TODO: complete this function if ability absorbing ever becomes a real issue
+
+}
+bool AI_HasSuperEffectiveMove(BattleContext *bc, AiContext *ac, bool flag) {
+    Move move;
+    int moveStatus = 0;
+    for(int i = 0; i < 4; i++) {
+        move = ac->self.team[ac->self.battler].moveset[i];
+        if(move.id != MoveId::NO_MOVE) {
+            moveStatus = 0;
+            getTypeMultiplier(bc, move, 40, &moveStatus);
+
+            if(moveStatus == MOVE_STATUS_SUPER_EFFECTIVE) {
+                if(flag) {
+                    return true;
+                } else if(advanceSeed(bc, "from ai super effective check") % 10 != 0){
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+int AI_SelectCommand(BattleContext *bc, AiContext *ac) {
+    if(AI_ShouldSwitch(bc, ac)) {
+        return 1;
+    }
+    return 3;
+}
 // returns the selected command code to do 
 void processAI(BattleContext *bc) {
     AiContext ac = {};
@@ -322,63 +384,70 @@ void processAI(BattleContext *bc) {
         }
 
     }
-    ailog("dmgloss rolls >> Rng advances 4");
-    for(i = 0; i < 4; i++) {
-
-        ac.damageLoss[i] = 100-(advanceSeed(bc)%16);
-    }
-    ac.currentIndex = 0;
-    ac.currentScore = 0;
-    for(i = 0;i<4;i++) {
-        if(ac.self.team[ac.self.battler].moveset[i].id != MoveId::NO_MOVE) {
-            ac.currentIndex = i;
-            ac.currentScore = ac.score[i];
-            if(ac.self.aiLevel & AI_BASIC) {
-                AI_BasicSeq(bc, &ac);
-            }
-            if(ac.self.aiLevel & AI_STRONG) {
-                AI_StrongSeq(bc, &ac);
-            }
-            if(ac.self.aiLevel & AI_EXPERT) {
-                AI_ExpertSeq(bc, &ac);
-            }
-            ac.score[i] = ac.currentScore;
-        }
-    }
-    ailog(ac.self.team[ac.self.battler].moveset[0].name + ": " + std::to_string(ac.score[0]));
-    ailog(ac.self.team[ac.self.battler].moveset[1].name + ": " + std::to_string(ac.score[1]));
-    ailog(ac.self.team[ac.self.battler].moveset[2].name + ": " + std::to_string(ac.score[2]));
-    ailog(ac.self.team[ac.self.battler].moveset[3].name + ": " + std::to_string(ac.score[3]));
-    ailog("pick a move > rng advances 1");
-    poscnt=1;
-    point[0]=ac.score[0];
-    poswork[0]=0;
-    for(i=1;i<4;i++){
-        if(ac.self.team[ac.self.battler].moveset[i].id != MoveId::NO_MOVE){
-            if(point[0]==ac.score[i]){
-                point[poscnt]=ac.score[i];
-                poswork[poscnt++]=i;
-            }
-            if(point[0]<ac.score[i]){
-                poscnt=1;
-                point[0]=ac.score[i];
-                poswork[0]=i;
-            }
-        }
-    }
-    int result = poswork[advanceSeed(bc)%poscnt];
-    // return the move we should use
-    if(result == 0) {
-        pos = COMMAND_MOVE_SLOT_1;
-    } else if(result == 1) {
-        pos = COMMAND_MOVE_SLOT_2;
-    } else if(result == 2) {
-        pos = COMMAND_MOVE_SLOT_3;
+    int choice = AI_SelectCommand(bc, &ac);
+    if(choice == 1) {
+        // switch
+        // TODO do switching logic here
     } else {
-        pos = COMMAND_MOVE_SLOT_4;
+        ailog("dmgloss rolls >> Rng advances 4");
+        for(i = 0; i < 4; i++) {
+
+            ac.damageLoss[i] = advanceSeed(bc)%16;
+            ailog(ac.damageLoss[i]);
+        }
+        ac.currentIndex = 0;
+        ac.currentScore = 0;
+        for(i = 0;i<4;i++) {
+            if(ac.self.team[ac.self.battler].moveset[i].id != MoveId::NO_MOVE) {
+                ac.currentIndex = i;
+                ac.currentScore = ac.score[i];
+                if(ac.self.aiLevel & AI_BASIC) {
+                    AI_BasicSeq(bc, &ac);
+                }
+                if(ac.self.aiLevel & AI_STRONG) {
+                    AI_StrongSeq(bc, &ac);
+                }
+                if(ac.self.aiLevel & AI_EXPERT) {
+                    AI_ExpertSeq(bc, &ac);
+                }
+                ac.score[i] = ac.currentScore;
+            }
+        }
+        ailog(ac.self.team[ac.self.battler].moveset[0].name + ": " + std::to_string(ac.score[0]));
+        ailog(ac.self.team[ac.self.battler].moveset[1].name + ": " + std::to_string(ac.score[1]));
+        ailog(ac.self.team[ac.self.battler].moveset[2].name + ": " + std::to_string(ac.score[2]));
+        ailog(ac.self.team[ac.self.battler].moveset[3].name + ": " + std::to_string(ac.score[3]));
+        ailog("pick a move > rng advances 1");
+        poscnt=1;
+        point[0]=ac.score[0];
+        poswork[0]=0;
+        for(i=1;i<4;i++){
+            if(ac.self.team[ac.self.battler].moveset[i].id != MoveId::NO_MOVE){
+                if(point[0]==ac.score[i]){
+                    point[poscnt]=ac.score[i];
+                    poswork[poscnt++]=i;
+                }
+                if(point[0]<ac.score[i]){
+                    poscnt=1;
+                    point[0]=ac.score[i];
+                    poswork[0]=i;
+                }
+            }
+        }
+        int result = poswork[advanceSeed(bc)%poscnt];
+        // return the move we should use
+        if(result == 0) {
+            pos = COMMAND_MOVE_SLOT_1;
+        } else if(result == 1) {
+            pos = COMMAND_MOVE_SLOT_2;
+        } else if(result == 2) {
+            pos = COMMAND_MOVE_SLOT_3;
+        } else {
+            pos = COMMAND_MOVE_SLOT_4;
+        }
+        ailog(pos);
+        bc->attacker.command = pos;
     }
-    ailog(pos);
-    bc->attacker.command = pos;
 
 }
 static void AI_INCDEC(AiContext *ac, int val) {
@@ -747,7 +816,7 @@ bool AI_ExpertSeq(BattleContext *bc, AiContext *ac) {
     }
 }
 bool AI_ExpertAttackDown(BattleContext *bc, AiContext *ac) {
-    if(AI_IfPara(bc, ac, 1, Stat::DEFENSE, 6, true)) {
+    if(AI_IfPara(bc, ac, 1, Stat::ATTACK, 6, true)) {
         return AI_ExpertAttackDown_2(bc, ac);
     }
     AI_INCDEC(ac, -1);
@@ -758,7 +827,7 @@ bool AI_ExpertAttackDown(BattleContext *bc, AiContext *ac) {
     return AI_ExpertAttackDown_1(bc, ac);
 }
 bool AI_ExpertAttackDown_1(BattleContext *bc, AiContext *ac) {
-    if(AI_IfPara(bc, ac, 1, Stat::ATTACK, 6, true)) {
+    if(AI_IfPara(bc, ac, 2, Stat::ATTACK, 3, true)) {
         return AI_ExpertAttackDown_2(bc, ac);
     }
     if(AI_IfRndUnder(bc, 50)) {

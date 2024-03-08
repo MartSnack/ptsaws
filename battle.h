@@ -2,7 +2,7 @@
 #define BATTLE_H_
 
 #include "pokemon.h"
-#define DEBUG 3 // 0 for none, 1 for basic, 3 for detailed, 7 for dump
+#define DEBUG 0 // 0 for none, 1 for basic, 3 for detailed, 7 for dump
 #define MAX_CLIENTS 4
 #define COMMAND_MOVE_SLOT_1 1 << 0
 #define COMMAND_MOVE_SLOT_2 1 << 1
@@ -15,20 +15,27 @@
 #define COMMAND_USE_ITEM_SUPER_POTION 1 << 4
 #define COMMAND_USE_ITEM_GUARD_SPEC 1 << 5
 #define COMMAND_USE_ITEM_HYPER_POTION 1 << 6
+#define COMMAND_USE_ITEM_PRLZ_HEAL 1 << 7
 #define COMMAND_USE_ITEM ( COMMAND_USE_ITEM_SUPER_POTION \
                          | COMMAND_USE_ITEM_GUARD_SPEC \
-                         | COMMAND_USE_ITEM_HYPER_POTION)
+                         | COMMAND_USE_ITEM_HYPER_POTION \
+                         | COMMAND_USE_ITEM_PRLZ_HEAL)
 
 #define TRIGGER_INTIMIDATE 1<<0
 
-unsigned short advanceSeed(BattleContext *bc);
+#define MOVE_STATUS_SUPER_EFFECTIVE 1
+#define MOVE_STATUS_NOT_EFFECTIVE 2
+#define MOVE_STATUS_IMMUNE 3
+
+unsigned short advanceSeed(BattleContext *bc, std::string blurb = "none");
 bool useMove(Move move, BattleContext *bc);
 int calcDamage(BattleContext *bc, Move move, int crit, int randomRoll);
-int getTypeMultiplier(BattleContext *bc, Move move, int damage);
+int getTypeMultiplier(BattleContext *bc, Move move, int damage, int *moveStatus);
 bool determineOrder(BattleContext *bc);
 bool doTurn(BattleContext *bc);
 bool checkStatusDisruption(BattleContext *bc, Move move);
 void updateMoveBuffers(BattleContext *bc, Move move);
+void updateFlagsWhenHit(BattleContext *bc, Move move);
 
 enum class FieldCondition {
     NONE,
@@ -61,16 +68,19 @@ struct PokeClient {
     int safeGuardTurns;
     int mistTurns;
     bool aiControl;
+    int aiJumpNum;
     bool isWinner;
+    bool isSwitching; // this client is switching out a new pokemon
+    bool successfulMove; // this client made a successful move this turn
     int aiLevel;
     Move previouslySelectedMove;
-    int battler;
-    Pokemon team[6];
-    int command;
+    int battler; // the index of the current battler in the team list
+    Pokemon team[6]; // the team list
+    int command; // which command we're using this turn
     PokeClient(void);
     void pokeSwitch(int nextBattler);
     // triggers
-    int triggers;
+    int triggers; // things that need to be triggered at the start of the turn (like intimidate)
 
 };
 struct BattleContext {

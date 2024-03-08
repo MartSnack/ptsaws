@@ -3,7 +3,7 @@
 #include <string>
 #include <cmath>
 #include "battle_effects.h"
-
+#include "moves.h"
 #include "battle.h"
 // 11.9.23
 // What you were working on: Getting last_waza_kind working by having the
@@ -13,25 +13,6 @@
 // Switching and using items do not update the previous move
 // unless it is reset to NONE somewhere else, I don't think it ever gets reset
 // until you make another move even if you've switched pokemon
-Move::Move() {
-    id = MoveId::NO_MOVE;
-}
-Move::Move(MoveId _id, std::string _name, int _power = 0, int _accuracy = 0, bool _secondary = false, int _secondaryAccuracy = 0, int _effect = 0, Type _moveType = Type::None, DamageType _defend = DamageType::NONE, DamageType _attack = DamageType::NONE, int _priority = 0, bool _highCritRatio = false, int _range = RANGE_TARGET) {
-    id = _id;
-    name = _name;
-    power = _power;
-    accuracy = _accuracy;
-    secondary = _secondary;
-    secondaryAccuracy = _secondaryAccuracy;
-    effect = _effect;
-    moveType = _moveType;
-    attack = _attack;
-    defend = _defend;
-    priority = _priority;
-    highCritRatio = _highCritRatio;
-    disabled = false;
-    range = _range;
-}
 
 PokeInfo::PokeInfo(std::string _name = "None", int _hp = 0, int _atk = 0, int _def = 0, int _spAtk = 0, int _spDef = 0, int _spd = 0, Type _primaryType = Type::None, Type _secondaryType = Type::None, AbilityId _ability = NO_ABILITY, AbilityId _ability2 = NO_ABILITY ){
     name = _name;
@@ -50,20 +31,7 @@ PokeInfo::PokeInfo(std::string _name = "None", int _hp = 0, int _atk = 0, int _d
 /*
 Move(MoveId _id, std::string _name, int _power = 0, int _accuracy = 0, bool _secondary = false, int _secondaryAccuracy = 0, int _effect = 0, Type _moveType = None, DamageType _defend = DamageType::NONE, DamageType _attack = DamageType::NONE, int _priority = 0, bool _highCritRatio = false, int _range = 0)
 */
-Move Empty = Move();
-Move Tackle = Move(MoveId::TACKLE, "Tackle", 35,100,false,0, 0, Type::Normal, DamageType::PHYSICAL, DamageType::PHYSICAL);
-Move FlameWheel = Move(MoveId::FLAME_WHEEL, "Flame Wheel", 60, 100, true, 10, BATTLE_EFFECT_BURN_HIT, Type::Fire, DamageType::PHYSICAL, DamageType::PHYSICAL);
-Move Taunt = Move(MoveId::TAUNT, "Taunt", 0, 100, false, 0, BATTLE_EFFECT_TAUNT, Type::Dark, DamageType::PHYSICAL, DamageType::PHYSICAL);
-Move NightSlash = Move(MoveId::NIGHT_SLASH, "Night Slash", 70, 100, false, 0, BATTLE_EFFECT_HIGH_CRITICAL, Type::Dark, DamageType::PHYSICAL, DamageType::PHYSICAL, 0, true);
-Move PoisonGas = Move(MoveId::POISON_GAS, "Poison Gas", 0, 55, false, 0, BATTLE_EFFECT_STATUS_POISON, Type::Poison);
-Move Screech = Move(MoveId::SCREECH, "Screech", 0, 85, false, 0, BATTLE_EFFECT_DEF_DOWN_2, Type::Normal);
-Move Smokescreen = Move(MoveId::SMOKESCREEN, "SmokeScreen", 0, 100, false, 0, BATTLE_EFFECT_ACC_DOWN, Type::Normal);
-Move QuickAttack = Move(MoveId::QUICK_ATTACK, "Quick Attack", 40, 100, false, 0, BATTLE_EFFECT_PRIORITY_1, Type::Normal, DamageType::PHYSICAL, DamageType::PHYSICAL, 1);
-Move WingAttack = Move(MoveId::WING_ATTACK, "Wing Attack", 60,100,false,0, 0, Type::Flying, DamageType::PHYSICAL, DamageType::PHYSICAL);
-Move DoubleTeam = Move(MoveId::DOUBLE_TEAM, "Double Team", 0, 0, false, 0, BATTLE_EFFECT_EVA_UP, Type::Normal, DamageType::NONE, DamageType::NONE, 0, false, RANGE_SELF);
-Move Endeavor = Move(MoveId::ENDEAVOR, "Endeavor", 1, 100, false, 0, BATTLE_EFFECT_SET_HP_EQUAL_TO_USER, Type::Normal, DamageType::PHYSICAL, DamageType::PHYSICAL);
-Move Charm = Move(MoveId::CHARM, "Charm", 0, 100, false, 0, BATTLE_EFFECT_ATK_DOWN_2, Type::Normal);
-Move Spark = Move(MoveId::SPARK, "Spark", 65, 100, true, 30, BATTLE_EFFECT_PARALYZE_HIT, Type::Electric, DamageType::PHYSICAL, DamageType::PHYSICAL);
+
 // TODO: Implement spark (and paralysis)
 
 Nature hardy = {100,100,100,100,100};
@@ -97,7 +65,8 @@ std::map<Mons, PokeInfo> pokemap = {
     {SKUNTANK, PokeInfo("Skuntank", 103,93,67,71,61,84,Type::Poison, Type::Dark, STENCH, AFTERMATH)},
     {ZUBAT, PokeInfo("Zubat", 40,45,35,30,40,55,Type::Poison,Type::Flying,INNER_FOCUS)},
     {STARAVIA, PokeInfo("Staravia", 55,75,50,40,40,80, Type::Flying, Type::Normal, INTIMIDATE)},
-    {PACHIRISU, PokeInfo("Pachirisu", 60,45,70,45,90,95, Type::Electric, Type::None, RUN_AWAY)}, // pickup as well, but who cares
+    {PACHIRISU, PokeInfo("Pachirisu", 60,45,70,45,90,95, Type::Electric, Type::None, RUN_AWAY)}, // pickup as well, but who cares we can't catch one anyway
+    {STARLY, PokeInfo("Starly", 40, 55, 30, 30, 30, 60, Type::Normal, Type::Flying, KEEN_EYE)}
 };
 
 
@@ -175,6 +144,9 @@ void Pokemon::sendOut() {
     bVal.volConditions = 0;
     bVal.turnsTaunted = 0;
     bVal.moveEffectsMask = 0;
+
+    bVal.movePrevByBattler = Empty;
+    bVal.moveHit = Empty;
 }
 void Pokemon::setBHp(int hp) {
     bVal.bHp = hp;
@@ -188,6 +160,63 @@ void setupClient(PokeClient *pc) {
 // Move::~Move() {
     
 // }
+
+// clients 
+PokeClient getMonfernoEternaClient() {
+    PokeClient p1;
+    Move moveset1[4] = {Tackle, FlameWheel, Taunt, Tackle};	
+    Pokemon monferno = Pokemon(33, gentle, 0, MONFERNO, moveset1);
+    monferno.setEvs(36,8,16,28,4,64);
+    monferno.calcStats(); // recalc stats after setting evs
+    // monferno.bVal.condition |= MON_CONDITION_PARALYSIS;
+    p1.battler = 0;
+    p1.aiControl = false;
+    p1.team[0] = monferno;
+    p1.name = "Player";
+    return p1;
+}
+PokeClient getStaraviaBikeClient() {
+    PokeClient p2;
+    Move moveset2[4] = {QuickAttack, WingAttack, DoubleTeam, Endeavor};
+    Pokemon stara = Pokemon(21, serious, 0, STARAVIA, moveset2);
+    p2.aiControl = true;
+    p2.aiLevel = 1;
+    p2.battler = 0;
+    p2.team[0] = stara;
+    p2.name = "BikeGirl";
+    return p2;
+}
+
+PokeClient getPachirisuClient() {
+    PokeClient p2;
+    Move moveset[4] = {Spark, QuickAttack, Charm, Empty};
+    Pokemon pachi = Pokemon(22, bold, 0, PACHIRISU, moveset);
+    p2.aiControl = true;
+    p2.aiLevel = 7;
+    p2.battler = 0;
+    p2.team[0] = pachi;
+    p2.name = "AI";
+    return p2;
+}
+
+PokeClient getTripleStarlyClient() {
+    PokeClient p2;
+    Move moveset[4] = {Endeavor, DoubleTeam, WingAttack, QuickAttack};
+    Move moveset2[4] = {QuickAttack, WingAttack, DoubleTeam, Endeavor};
+    Pokemon star1 = Pokemon(17, quirky, 0, STARLY, moveset2);
+    Pokemon star2 = Pokemon(18, quirky, 0, STARLY, moveset2);
+    Pokemon star3 = Pokemon(19, quirky, 0, STARLY, moveset2);
+    p2.aiControl = true;
+    p2.aiLevel = 1;
+    p2.battler = 0;
+    p2.aiJumpNum = 4;
+    p2.team[0] = star1;
+    // p2.team[1] = star2;
+    // p2.team[2] = star3;
+    p2.name = "AI";
+    return p2;
+}
+
 BattleContext setupJupiterFight(unsigned long startingSeed) {
     Move moveset1[4] = {Tackle, FlameWheel, Taunt, Tackle};	
     Move moveset2[4] = {NightSlash,PoisonGas, Screech, Smokescreen};
@@ -221,26 +250,9 @@ BattleContext setupJupiterFight(unsigned long startingSeed) {
     bc.turnNumber = 0;
     return bc;
 }
-
 BattleContext setupVarFight(unsigned long startingSeed) {
-    Move moveset1[4] = {Tackle, FlameWheel, Taunt, Tackle};	
-    Move moveset2[4] = {QuickAttack, WingAttack, DoubleTeam, Endeavor};
-    Pokemon monferno = Pokemon(33, gentle, 0, MONFERNO, moveset1);
-    monferno.setEvs(36,8,16,28,4,64);
-    monferno.calcStats(); // recalc stats after setting evs
-
-    Pokemon stara = Pokemon(21, serious, 0, STARAVIA, moveset2);
-
-    PokeClient p1;
-    PokeClient p2;
-    p2.aiControl = true;
-    p2.aiLevel = 1;
-    p2.battler = 0;
-    p1.battler = 0;
-    p1.team[0] = monferno;
-    p2.team[0] = stara;
-    p1.name = "Player";
-    p2.name = "AI";
+    PokeClient p1 = getMonfernoEternaClient();
+    PokeClient p2 = getTripleStarlyClient();
     p1.pokeSwitch(p1.battler);
     p2.pokeSwitch(p2.battler);
     // p1.team[p1.battler].sendOut();

@@ -29,11 +29,18 @@ void log(int logText) {
         std::cout << logText << std::endl;
     }
 }
-unsigned short advanceSeed(BattleContext *bc){
+unsigned short advanceSeed(BattleContext *bc, std::string blurb){
 
     unsigned long seed = (1103515245 * bc -> battleRng.seed + 24691) & 0xFFFFFFFF;
     unsigned short result = seed / 65536;
     bc -> battleRng = {seed, result};
+    if(DEBUG & 4) {
+        if(blurb == "none") {
+            std::cout << seed << std::endl;
+        } else {
+            std::cout << std::to_string(seed) << " -> " << blurb << std::endl;
+        }
+    }
     return result;
 };
 int critStages[6] = {16,8,4,3,2,2};
@@ -67,6 +74,7 @@ PokeClient::PokeClient(void): previouslySelectedMove() {
     mistTurns = 0;
     isWinner = false;
     triggers = 0;
+    aiJumpNum = 2;
 }
 
 void PokeClient::pokeSwitch(int nextBattler) {
@@ -137,13 +145,22 @@ int getCritStage(Move move, BattleContext *bc){
     // std::cout << "\tcrit stage: " << stage << std::endl;
     return critStages[stage];
 }
-int getTypeMultiplier(BattleContext *bc, Move move, int damage) {
+int getTypeMultiplier(BattleContext *bc, Move move, int damage, int *moveStatus) {
+    if(!moveStatus) {
+        moveStatus = 0;
+    }
     int stabBonus = (bc->attacker.team[bc->attacker.battler].info.primaryType == move.moveType || bc->attacker.team[bc->attacker.battler].info.secondaryType == move.moveType) ? 150 : 100;
 
     int type1Bonus = typeMap[move.moveType][bc->defender.team[bc->defender.battler].info.primaryType] * 10;
     int type2Bonus = typeMap[move.moveType][bc->defender.team[bc->defender.battler].info.secondaryType] * 10;
+    int mul = type1Bonus * type2Bonus;
+    if(mul >= 200) {
+        *moveStatus = MOVE_STATUS_SUPER_EFFECTIVE;
+    } else if(mul < 100 && mul > 0) {
+        *moveStatus = MOVE_STATUS_NOT_EFFECTIVE;
+    }
     damage = damage * stabBonus / 100;
-    damage = (damage * type1Bonus * type2Bonus) / 100;
+    damage = (damage * mul) / 100;
 
     return damage;
 }
@@ -218,7 +235,8 @@ int calcDamage(BattleContext *bc, Move move, int crit = 1, int randomRoll = 100)
     powerResult = powerResult + 2;
     powerResult = powerResult * crit; // should be 2 if we critted :A
     powerResult = powerResult * (100 - randomRoll) / 100;
-    powerResult = getTypeMultiplier(bc, move, powerResult);
+    int moveStatus = 0;
+    powerResult = getTypeMultiplier(bc, move, powerResult, &moveStatus);
     return powerResult;
 };
 bool rollAccuracy(Move move, BattleContext *bc) {
@@ -299,8 +317,9 @@ bool useMove(Move move, BattleContext *bc) {
         int crit = 15;
         int dmgRoll = 15;
         int dmg = 0;
-        if(move.power == 0){
+        if(move.power < 2){
             // non-attacking move
+            // or move with variable flat damage 
         } else {
             log("\trolling crit");
             crit = advanceSeed(bc) % getCritStage(move, bc);
@@ -380,6 +399,11 @@ bool useItem(BattleContext *bc, int item) {
         } else {
             return false;
         }
+    } else if(item & COMMAND_USE_ITEM_PRLZ_HEAL) {
+        log(bc->attacker.name + " uses Prlz Heal");
+        if(bc->attacker.team[bc->attacker.battler].bVal.condition & MON_CONDITION_PARALYSIS) {
+            bc->attacker.team[bc->attacker.battler].bVal.condition = MON_CONDITION_NONE; // clear paralysis
+        }
     }
     return false;
 }
@@ -400,6 +424,9 @@ bool checkStatusDisruption(BattleContext *bc, Move move) {
     if(attackingPokemon.bVal.condition & MON_CONDITION_PARALYSIS) {
         if(attackingPokemon.cAbility != AbilityId::MAGIC_GUARD) {
             if(advanceSeed(bc) % 4 == 0) {
+                if(DEBUG) {
+                    std::cout << "\tFully Paralyzed!" << std::endl;
+                }
                 return true; // disrupted
             }
         }
@@ -410,13 +437,23 @@ bool checkStatusDisruption(BattleContext *bc, Move move) {
 void updateMoveBuffers(BattleContext *bc, Move move) {
     if(bc->moveWasSuccessful) {
         bc->attacker.previouslySelectedMove = move;
+        bc->attacker.successfulMove = true;
+    }
+    updateFlagsWhenHit(bc, move);
+}
+void updateFlagsWhenHit(BattleContext *bc, Move move) {
+    if(bc->moveWasSuccessful) {
+        bc->defender.team[bc->defender.battler].bVal.moveHit = move;
+    } else {
+        bc->defender.team[bc->defender.battler].bVal.moveHit = Empty;
     }
 }
 void resetContext(BattleContext *bc) {
     bc->moveWasSuccessful = false;
+    bc->attacker.successfulMove = false;
 }
 void executeCommand(BattleContext *bc) {
-
+    resetContext(bc);
     if(bc->attacker.command & COMMAND_MOVE) {
 
         int moveNum = log2(bc->attacker.command);
@@ -501,7 +538,27 @@ void triggerEndTurnConditions(PokeClient *p) {
 // switch in a new mon if we need it
 // returns true if we swapped
 // return false if we didn't.
-bool switchIn(PokeClient *pc) {
+bool switchIn(BattleContext *bc, bool attacker) {
+    PokeClient *pc;
+    if(attacker) {
+        pc = &bc->attacker;
+    } else {
+        pc = &bc->defender;
+    }
+    int numValidMons = 0;
+    if(pc->aiControl) {
+        for(int i = 0; i<6; i++) {
+            if(pc->team[i].bVal.bHp > 0) {
+                numValidMons++;
+            }
+        }
+        // if(numValidMons > 1) {
+        //     // advanceSeed(bc);
+        //     advanceSeed(bc); // TODO: Figure out why the KO switch routine advances the rng 2 frames when it has multiple valid choices to send out 
+        //     // research: Against bike trainers with 3 starly's this was first observed. First Starly KO leads to 2 extra frame jumps prior to AI deciding its move
+        //     // answer: the ai is evaluating if it should switch, and several of those checks use an rng value.  Notably, it will use 2 at least if its current battler has a super effective move 
+        // }
+    }
     for(int i = 0; i<6; i++) {
         if(pc->team[i].bVal.bHp > 0) {
             pc->pokeSwitch(i);
@@ -544,16 +601,22 @@ bool endOfTurn(BattleContext *bc) {
     } else {
         triggerEndTurnConditions(&bc->defender);
         if(bc->defender.team[bc->defender.battler].bVal.bHp <= 0) {
-            shouldContinue = switchIn(&bc->defender);
+            shouldContinue = switchIn(bc, false);
+            bc->defender.isSwitching = true;
         }
         if(shouldContinue) {
             triggerEndTurnConditions(&bc->attacker);
             if(bc->attacker.team[bc->attacker.battler].bVal.bHp <= 0) {
-                shouldContinue = switchIn(&bc->attacker);
+                shouldContinue = switchIn(bc, true);
+                bc->attacker.isSwitching = true;
             }
             if(shouldContinue) {
                 log("before AI starts >> RNG advances 4");
-                advanceSeed(bc);
+                if(bc->defender.aiControl & bc->defender.isSwitching & bc->defender.successfulMove) {
+                    log("Skipping first AI rng usage due to unknown reason -> ai defender is switching and took its turn");
+                } else {
+                    advanceSeed(bc);
+                }
                 advanceSeed(bc);
                 advanceSeed(bc);
                 advanceSeed(bc); // ai advances the seed 4 for some reason we don't know yet
@@ -583,7 +646,7 @@ bool doTurn(BattleContext *bc) {
     preTurnEffects(bc, false); // defender effects
 
     // turn overall start advances 4
-    log("Turn Starts > RNG Advances 4");
+    log("Turn Starts > RNG Advances 4"); // speed rand values that we don't really need
     advanceSeed(bc);
     advanceSeed(bc);
     advanceSeed(bc);

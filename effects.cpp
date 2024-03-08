@@ -162,6 +162,8 @@ bool applyEffect(Move move, BattleContext *bc) {
         case BATTLE_EFFECT_BURN_HIT:
         case BATTLE_EFFECT_STATUS_BURN:
             return applyBurn(&bc->defender.team[bc->defender.battler], bc);
+        case BATTLE_EFFECT_PARALYZE_HIT:
+            return applyParalysis(&bc->defender.team[bc->defender.battler], bc);
         case BATTLE_EFFECT_STATUS_POISON:
             return applyPoison(&bc->defender.team[bc->defender.battler], bc);
         case BATTLE_EFFECT_ATK_DOWN_2:
