@@ -57,6 +57,12 @@ static	const int OkCompPowerSeqNo[]={
 struct AiContext {
     int damageLoss[4];
     int score[4];
+
+	bool dmgCalcLossFlag;
+	bool dmgCalcNoLossFlag;
+	int dmgCalcNoLoss[4];
+	int dmgCalcLoss[4];
+
     int currentIndex; // which move is being considered right now
     int currentScore; // score being actively modified before being finalized in the score var
     int currentPowerFlag; // whether the current move is most powerful, not most powerful, or doesn't deal damage
@@ -152,5 +158,13 @@ bool AI_ExpertAttackDown_1(BattleContext *bc, AiContext *ac);
 bool AI_ExpertAttackDown_2(BattleContext *bc, AiContext *ac);
 bool AI_ExpertAttackDown_3(BattleContext *bc, AiContext *ac);
 
+bool AI_BasicConfuse(BattleContext *bc, AiContext *ac);
+bool AI_ExpertConfuse(BattleContext *bc, AiContext *ac);
+bool AI_ExpertConfuse_1(BattleContext *bc, AiContext *ac);
+bool AI_ExpertConfuse_end(BattleContext *bc, AiContext *ac);
+
+bool AI_ExpertBypassAccuracy(BattleContext *bc, AiContext *ac);
+bool AI_ExpertBypassAccuracy_1(BattleContext *bc, AiContext *ac);
+bool AI_ExpertBypassAccuracy_2(BattleContext *bc, AiContext *ac);
 
 #endif /*TR_AI_H*/

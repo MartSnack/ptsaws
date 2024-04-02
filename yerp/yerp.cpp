@@ -371,7 +371,7 @@ BiggerSeed getWildXp(Range r) {
         value = advanceSeed(seed);
         slot = 0;
         nature = 0;
-        while(battles < 70) {
+        while(totalEv < 104) {
             if(stepCounter >= maxSteps | value.result/0x290 < 5){
                 if(stepCounter < maxSteps){
                     value = advanceSeed(value.seed);
@@ -647,7 +647,7 @@ int main()
     using std::chrono::duration;
     using std::chrono::milliseconds;
     auto t1 = high_resolution_clock::now();
-    unsigned long end = 425UL;
+    unsigned long end = 16000000UL;
     // unsigned long end = 169496720UL;
     // unsigned long end = 400000000UL;
 
@@ -665,7 +665,7 @@ int main()
     // bigger seed for high/low stuff
     std::vector<std::future<BiggerSeed>> futures;
     for(auto &e : ranges){
-        futures.push_back(std::async(getShiny, e));
+        futures.push_back(std::async(getWildXp, e));
     }
     //retrive and print the value stored in the future
     for(auto &e : futures) {

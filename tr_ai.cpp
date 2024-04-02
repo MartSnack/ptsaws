@@ -146,7 +146,7 @@ bool AI_IfFirst(BattleContext *bc, AiContext *ac, bool target = true) {
     }
 
 }
-int AI_DamageCalc(BattleContext *bc, AiContext *ac, Move move, int loss = 100) {
+int AI_DamageCalc(BattleContext *bc, AiContext *ac, Move move, int loss = 0) {
 
     return calcDamage(bc, move, 1, loss);
 }
@@ -156,36 +156,51 @@ int AI_CompPowerCalc(BattleContext *bc, AiContext *ac, int *damage) {
     int ok,no;
     int maxDamage = 0;
     for(i=0;i<4;i++){
-        no=0;
-        while(NoCompPowerSeqNo[no]!=0xffff){
-            if(ac->self.team[ac->self.battler].moveset[i].effect==NoCompPowerSeqNo[no]){
-                break;
-            }
-            no++;
-        }
-        ok=0;
-        while(OkCompPowerSeqNo[ok]!=0xffff){
-            if(ac->self.team[ac->self.battler].moveset[i].effect==OkCompPowerSeqNo[ok]){
-                break;
-            }
-            ok++;
-        }
-        if((OkCompPowerSeqNo[ok]!=0xffff)|| 
-        ((ac->self.team[ac->self.battler].moveset[i].id != MoveId::NO_MOVE)&& 
-        (NoCompPowerSeqNo[no]==0xffff)&&
-        (ac->self.team[ac->self.battler].moveset[i].power > 1))) {
-            if(ac->lossCalcOn) {
-                loss = ac->damageLoss[i];
-            } else {
-                loss = 0;
-            }
-            damage[i] = AI_DamageCalc(bc, ac, ac->self.team[ac->self.battler].moveset[i], loss);
+        if(ac->dmgCalcLossFlag && ac->lossCalcOn) {
+            damage[i] = ac->dmgCalcLoss[i];
+        } else if(ac->dmgCalcNoLossFlag && !ac->lossCalcOn) {
+            damage[i] = ac->dmgCalcNoLoss[i];
         } else {
-            damage[i] = 0;
+            no=0;
+            while(NoCompPowerSeqNo[no]!=0xffff){
+                if(ac->self.team[ac->self.battler].moveset[i].effect==NoCompPowerSeqNo[no]){
+                    break;
+                }
+                no++;
+            }
+            ok=0;
+            while(OkCompPowerSeqNo[ok]!=0xffff){
+                if(ac->self.team[ac->self.battler].moveset[i].effect==OkCompPowerSeqNo[ok]){
+                    break;
+                }
+                ok++;
+            }
+            if((OkCompPowerSeqNo[ok]!=0xffff)|| 
+            ((ac->self.team[ac->self.battler].moveset[i].id != MoveId::NO_MOVE)&& 
+            (NoCompPowerSeqNo[no]==0xffff)&&
+            (ac->self.team[ac->self.battler].moveset[i].power > 1))) {
+                if(ac->lossCalcOn) {
+                    loss = ac->damageLoss[i];
+                } else {
+                    loss = 0;
+                }
+                int dmgVal = AI_DamageCalc(bc, ac, ac->self.team[ac->self.battler].moveset[i], loss);
+                damage[i] = dmgVal;
+                if(ac->lossCalcOn) {
+                    ac->dmgCalcLoss[i] = dmgVal;
+                } else {
+                    ac->dmgCalcNoLoss[i] = dmgVal;
+                }
+            } else {
+                damage[i] = 0;
+            }
         }
-
     }
-
+    if(ac->lossCalcOn) {
+        ac->dmgCalcLossFlag = true;
+    } else {
+        ac->dmgCalcNoLossFlag = true;
+    }
     for(i=0;i<4;i++) {
         if(maxDamage < damage[i]) {
             maxDamage = damage[i];
@@ -256,8 +271,22 @@ static bool AI_DoesMoveKo(BattleContext *bc, AiContext *ac) {
     int	no,ok;
     int damage = 0;
     if(ac->lossCalcOn) {
+        if(ac->dmgCalcLossFlag) {
+            if(ac->target.team[ac->target.battler].bVal.bHp <= ac->dmgCalcLoss[ac->currentIndex]) {
+                return true;
+            } else {
+                return false;
+            }
+        }
         loss = ac->damageLoss[ac->currentIndex];
     } else {
+        if(ac->dmgCalcNoLossFlag) {
+            if(ac->target.team[ac->target.battler].bVal.bHp <= ac->dmgCalcNoLoss[ac->currentIndex]) {
+                return true;
+            } else {
+                return false;
+            }
+        }
         loss = 0;
     }
     
@@ -326,7 +355,6 @@ bool AI_HasAbsorbAbilityInParty(BattleContext *bc, AiContext *ac) {
         return false;
     }
     return false; // TODO: complete this function if ability absorbing ever becomes a real issue
-
 }
 bool AI_HasSuperEffectiveMove(BattleContext *bc, AiContext *ac, bool flag) {
     Move move;
@@ -337,7 +365,7 @@ bool AI_HasSuperEffectiveMove(BattleContext *bc, AiContext *ac, bool flag) {
             moveStatus = 0;
             getTypeMultiplier(bc, move, 40, &moveStatus);
 
-            if(moveStatus == MOVE_STATUS_SUPER_EFFECTIVE) {
+            if(moveStatus & MOVE_STATUS_SUPER_EFFECTIVE) {
                 if(flag) {
                     return true;
                 } else if(advanceSeed(bc, "from ai super effective check") % 10 != 0){
@@ -372,7 +400,12 @@ void processAI(BattleContext *bc) {
     }
     bc->attacker = ac.self;
     bc->defender = ac.target; // temp reassign battle context for damage calc
+
+    ac.dmgCalcLossFlag = false;
+    ac.dmgCalcNoLossFlag = false;
     for(i = 0; i < 4; i++) {
+        ac.dmgCalcLoss[i] = 0;
+        ac.dmgCalcNoLoss[i] = 0;
         if(ac.self.team[ac.self.battler].moveset[i].id == MoveId::NO_MOVE) {
             ac.score[i] = 0;
         } else {
@@ -404,9 +437,43 @@ void processAI(BattleContext *bc) {
                 if(ac.self.aiLevel & AI_BASIC) {
                     AI_BasicSeq(bc, &ac);
                 }
+                // if(ac.self.aiLevel & AI_STRONG) {
+                //     AI_StrongSeq(bc, &ac);
+                // }
+                // if(ac.self.aiLevel & AI_EXPERT) {
+                //     AI_ExpertSeq(bc, &ac);
+                // }
+                ac.score[i] = ac.currentScore;
+            }
+        }
+        // temp hack for ai?
+        for(i = 0;i<4;i++) {
+            if(ac.self.team[ac.self.battler].moveset[i].id != MoveId::NO_MOVE) {
+                ac.currentIndex = i;
+                ac.currentScore = ac.score[i];
+                // if(ac.self.aiLevel & AI_BASIC) {
+                //     AI_BasicSeq(bc, &ac);
+                // }
                 if(ac.self.aiLevel & AI_STRONG) {
                     AI_StrongSeq(bc, &ac);
                 }
+                // if(ac.self.aiLevel & AI_EXPERT) {
+                //     AI_ExpertSeq(bc, &ac);
+                // }
+                ac.score[i] = ac.currentScore;
+            }
+        }
+        // temp hack for AI?
+        for(i = 0;i<4;i++) {
+            if(ac.self.team[ac.self.battler].moveset[i].id != MoveId::NO_MOVE) {
+                ac.currentIndex = i;
+                ac.currentScore = ac.score[i];
+                // if(ac.self.aiLevel & AI_BASIC) {
+                //     AI_BasicSeq(bc, &ac);
+                // }
+                // if(ac.self.aiLevel & AI_STRONG) {
+                //     AI_StrongSeq(bc, &ac);
+                // }
                 if(ac.self.aiLevel & AI_EXPERT) {
                     AI_ExpertSeq(bc, &ac);
                 }
@@ -458,6 +525,10 @@ static void AI_INCDEC(AiContext *ac, int val) {
 }
 bool AI_DEC1(AiContext *ac) {
     AI_INCDEC(ac, -1);
+    return true;
+}
+bool AI_DEC5(AiContext *ac) {
+    AI_INCDEC(ac, -5);
     return true;
 }
 bool AI_DEC10(AiContext *ac) {
@@ -594,11 +665,27 @@ bool AI_CheckEffect(BattleContext *bc, AiContext *ac) {
             return AI_BasicAccuracyDown(bc, ac);
         case(BATTLE_EFFECT_EVA_UP): // 16
             return AI_BasicEvaUp(bc, ac);
+        case(BATTLE_EFFECT_STATUS_CONFUSE): // 49
+            return AI_BasicConfuse(bc, ac);
         case(BATTLE_EFFECT_SET_HP_EQUAL_TO_USER):
             return AI_BasicRiskyDamage(bc, ac);
         default:
             return true;
     }
+}
+
+bool AI_BasicConfuse(BattleContext *bc, AiContext *ac) {
+    if(AI_IfVolCondition(bc, ac, VOLATILE_CONDITION_CONFUSION, true)) {
+        return AI_DEC5(ac);
+    }
+    if(AI_CheckAbility(bc, ac) == OWN_TEMPO){
+        return AI_DEC10(ac);
+    }
+    if(ac->target.sideConditions & SIDE_CONDITION_SAFEGUARD) {
+        return AI_DEC10(ac);
+    }
+    return true;
+    
 }
 bool AI_BasicRiskyDamage(BattleContext *bc, AiContext *ac) {
     AI_CheckTypeAdvantage(bc, ac);
@@ -797,8 +884,12 @@ bool AI_StrongSeq(BattleContext *bc, AiContext *ac) {
 
 bool AI_ExpertSeq(BattleContext *bc, AiContext *ac) {
     switch(ac->self.team[ac->self.battler].moveset[ac->currentIndex].effect) {
+        case(BATTLE_EFFECT_BYPASS_ACCURACY):
+            return AI_ExpertBypassAccuracy(bc, ac); // 17
         case(BATTLE_EFFECT_STATUS_POISON): // 66
             return AI_ExpertPoison(bc, ac);
+        case(BATTLE_EFFECT_STATUS_CONFUSE): // 49
+            return AI_ExpertConfuse(bc, ac);
         case(BATTLE_EFFECT_ATK_DOWN_2): // 58
             return AI_ExpertAttackDown(bc, ac);
         case(BATTLE_EFFECT_DEF_DOWN_2): // 59
@@ -811,10 +902,66 @@ bool AI_ExpertSeq(BattleContext *bc, AiContext *ac) {
             return AI_ExpertHighCritical(bc, ac);
         case(BATTLE_EFFECT_SET_HP_EQUAL_TO_USER):
             return AI_ExpertEndeavor(bc, ac);
+
         default:
             return true;
     }
 }
+
+bool AI_ExpertBypassAccuracy(BattleContext *bc, AiContext *ac) {
+    // check if target has high evasion
+    if(AI_IfPara(bc, ac, 2, Stat::EVASION, 10, true)) {
+        return AI_ExpertBypassAccuracy_1(bc, ac);
+    }
+    // check if attacker has low accuracy
+    if(AI_IfPara(bc, ac, 0, Stat::ACCURACY, 2)) {
+        return AI_ExpertBypassAccuracy_1(bc, ac);
+    }
+    if(AI_IfPara(bc, ac, 2, Stat::EVASION, 8, true)) {
+        return AI_ExpertBypassAccuracy_2(bc, ac);
+    }
+    if(AI_IfPara(bc, ac, 0, Stat::ACCURACY, 4)) {
+        return AI_ExpertBypassAccuracy_2(bc, ac);
+    }
+    return true; // aiend
+}
+bool AI_ExpertBypassAccuracy_1(BattleContext *bc, AiContext *ac) {
+    AI_INCDEC(ac, 1);
+    return AI_ExpertBypassAccuracy_2(bc, ac);
+}
+bool AI_ExpertBypassAccuracy_2(BattleContext *bc, AiContext *ac) {
+    if(AI_IfRndUnder(bc, 100)) {
+        return true; // aiend
+    }
+    AI_INCDEC(ac, 1);
+    return true;
+}
+bool AI_ExpertConfuse(BattleContext *bc, AiContext *ac){
+    if(AI_IfHpOver(bc, ac, 70, true)) {
+        return AI_ExpertConfuse_end(bc, ac);
+    }
+    if(AI_IfRndUnder(bc, 128)) {
+        return AI_ExpertConfuse_1(bc, ac);
+    }
+    AI_INCDEC(ac, -1);
+    return AI_ExpertConfuse_1(bc, ac);
+}
+bool AI_ExpertConfuse_1(BattleContext *bc, AiContext *ac) {
+    if(AI_IfHpOver(bc, ac, 50, true)) {
+        return AI_ExpertConfuse_end(bc, ac);
+    }
+    AI_INCDEC(ac, -1);
+    if(AI_IfHpOver(bc, ac, 30, true)) {
+        return AI_ExpertConfuse_end(bc, ac);
+    }
+    AI_INCDEC(ac, -1);
+    return AI_ExpertConfuse_end(bc, ac);
+}
+bool AI_ExpertConfuse_end(BattleContext *bc, AiContext *ac) {
+    return true;
+}
+
+
 bool AI_ExpertAttackDown(BattleContext *bc, AiContext *ac) {
     if(AI_IfPara(bc, ac, 1, Stat::ATTACK, 6, true)) {
         return AI_ExpertAttackDown_2(bc, ac);

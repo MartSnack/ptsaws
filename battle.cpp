@@ -149,59 +149,82 @@ int getTypeMultiplier(BattleContext *bc, Move move, int damage, int *moveStatus)
     if(!moveStatus) {
         moveStatus = 0;
     }
-    int stabBonus = (bc->attacker.team[bc->attacker.battler].info.primaryType == move.moveType || bc->attacker.team[bc->attacker.battler].info.secondaryType == move.moveType) ? 150 : 100;
-
-    int type1Bonus = typeMap[move.moveType][bc->defender.team[bc->defender.battler].info.primaryType] * 10;
-    int type2Bonus = typeMap[move.moveType][bc->defender.team[bc->defender.battler].info.secondaryType] * 10;
-    int mul = type1Bonus * type2Bonus;
-    if(mul >= 200) {
-        *moveStatus = MOVE_STATUS_SUPER_EFFECTIVE;
-    } else if(mul < 100 && mul > 0) {
-        *moveStatus = MOVE_STATUS_NOT_EFFECTIVE;
+    int mul = 0;
+    if(bc->defender.team[bc->defender.battler].cAbility == AbilityId::LEVITATE && move.moveType == Type::Ground) {
+        *moveStatus |= MOVE_STATUS_LEVITATED;
+    } else {
+        int type1Bonus = typeMap[move.moveType][bc->defender.team[bc->defender.battler].info.primaryType] * 10;
+        int type2Bonus = typeMap[move.moveType][bc->defender.team[bc->defender.battler].info.secondaryType] * 10;
+        mul = type1Bonus * type2Bonus;
+        if(mul >= 200) {
+            *moveStatus |= MOVE_STATUS_SUPER_EFFECTIVE;
+        } else if(mul < 100 && mul > 0) {
+            *moveStatus |= MOVE_STATUS_NOT_VERY_EFFECTIVE;
+        }
     }
+
+    if(mul == 0) {
+        *moveStatus |= MOVE_STATUS_IMMUNE;
+    }
+    int stabBonus = 100;
+    if(move.moveType != Type::None) {
+        stabBonus = (bc->attacker.team[bc->attacker.battler].info.primaryType == move.moveType || bc->attacker.team[bc->attacker.battler].info.secondaryType == move.moveType) ? 150 : 100;
+    }
+
+
     damage = damage * stabBonus / 100;
     damage = (damage * mul) / 100;
 
     return damage;
 }
-int calcDamage(BattleContext *bc, Move move, int crit = 1, int randomRoll = 100) {
-    int lvlBase = ((2 * bc->attacker.team[bc->attacker.battler].level) / 5);
+int calcDamage(BattleContext *bc, Move move, int crit, int randomRoll, bool hurtSelf) {
+    PokeClient attacker;
+    PokeClient defender;
+    if(hurtSelf) {
+        attacker = bc->attacker;
+        defender = bc->attacker;
+    } else {
+        attacker = bc->attacker;
+        defender = bc->defender;
+    }
+
+    int lvlBase = ((2 * attacker.team[attacker.battler].level) / 5);
     lvlBase = lvlBase + 2;
 
     int cAtkStat = 0;
     int cDefStat = 0;
     if( move.attack ==  DamageType::PHYSICAL) {
-        cAtkStat = bc->attacker.team[bc->attacker.battler].cAtk;
-        if(bc->attacker.team[bc->attacker.battler].bVal.atkStg < 6 && crit>1){
+        cAtkStat = attacker.team[attacker.battler].cAtk;
+        if(attacker.team[attacker.battler].bVal.atkStg < 6 && crit>1){
             // we crit, so ignore lowered atk stage
             cAtkStat = modifyStatValue(cAtkStat, 6);
         } else {
-            cAtkStat = modifyStatValue(cAtkStat, bc->attacker.team[bc->attacker.battler].bVal.atkStg);
+            cAtkStat = modifyStatValue(cAtkStat, attacker.team[attacker.battler].bVal.atkStg);
         }
     } else {
-        cAtkStat = bc->attacker.team[bc->attacker.battler].cSpAtk;
-        if(bc->attacker.team[bc->attacker.battler].bVal.spAtkStg < 6 && crit>1){
+        cAtkStat = attacker.team[attacker.battler].cSpAtk;
+        if(attacker.team[attacker.battler].bVal.spAtkStg < 6 && crit>1){
             // we crit, so ignore lowered atk stage
             cAtkStat = modifyStatValue(cAtkStat, 6);
         } else {
-            cAtkStat = modifyStatValue(cAtkStat, bc->attacker.team[bc->attacker.battler].bVal.spAtkStg);
+            cAtkStat = modifyStatValue(cAtkStat, attacker.team[attacker.battler].bVal.spAtkStg);
         }
     }
     if( move.defend ==  DamageType::PHYSICAL) {
-        cDefStat = bc->defender.team[bc->defender.battler].cDef;
-        if(bc->defender.team[bc->defender.battler].bVal.defStg > 6 && crit > 1) {
+        cDefStat = defender.team[defender.battler].cDef;
+        if(defender.team[defender.battler].bVal.defStg > 6 && crit > 1) {
             // ignore higher defense on crit
             cDefStat = modifyStatValue(cDefStat, 6);
         } else {
-            cDefStat = modifyStatValue(cDefStat, bc->defender.team[bc->defender.battler].bVal.defStg);
+            cDefStat = modifyStatValue(cDefStat, defender.team[defender.battler].bVal.defStg);
         }
     } else {
-        cDefStat = bc->defender.team[bc->defender.battler].cSpDef;
-        if(bc->defender.team[bc->defender.battler].bVal.spDefStg > 6 && crit > 1) {
+        cDefStat = defender.team[defender.battler].cSpDef;
+        if(defender.team[defender.battler].bVal.spDefStg > 6 && crit > 1) {
             // ignore higher defense on crit
             cDefStat = modifyStatValue(cDefStat, 6);
         } else {
-            cDefStat = modifyStatValue(cDefStat, bc->defender.team[bc->defender.battler].bVal.spDefStg);
+            cDefStat = modifyStatValue(cDefStat, defender.team[defender.battler].bVal.spDefStg);
         }
     }
     int movePower = move.power;
@@ -223,13 +246,17 @@ int calcDamage(BattleContext *bc, Move move, int crit = 1, int randomRoll = 100)
             return 0; // move failed, return 0 for damage 
         }
     }
-    if(move.moveType == Type::Fire && bc->attacker.team[bc->attacker.battler].cAbility == AbilityId::BLAZE && bc->attacker.team[bc->attacker.battler].bVal.bHp <= bc->attacker.team[bc->attacker.battler].cHp/3){
+    if(attacker.team[attacker.battler].bVal.item == ITEM_BOOST_DARK && move.moveType == Type::Dark) {
+        // black sunglasses, dread plate
+        movePower = movePower * 120 / 100; // 20% damage boosto
+    }
+    if(move.moveType == Type::Fire && attacker.team[attacker.battler].cAbility == AbilityId::BLAZE && attacker.team[attacker.battler].bVal.bHp <= attacker.team[attacker.battler].cHp/3){
         movePower = movePower * 150 / 100;
     }
     int powerBase = (lvlBase * movePower * (cAtkStat));
     int defDivide = powerBase / cDefStat;
     int powerResult = (defDivide/50);
-    if((bc->attacker.team[bc->attacker.battler].bVal.condition & MON_CONDITION_BURN) && move.attack == DamageType::PHYSICAL) {
+    if((attacker.team[attacker.battler].bVal.condition & MON_CONDITION_BURN) && move.attack == DamageType::PHYSICAL) {
         powerResult = powerResult/2;
     }
     powerResult = powerResult + 2;
@@ -264,8 +291,18 @@ void heal(Pokemon *p, int amount) {
         p->bVal.bHp = p->cHp;
     }
 }
-void dealDamage(Pokemon *p,  int damage) {
-    p->bVal.bHp = p->bVal.bHp - damage;
+void dealDamage(Pokemon *p,  int damage, bool directSource) {
+    if(directSource && p->bVal.substituteHp > 0) {
+        p->bVal.substituteHp = p->bVal.substituteHp - damage;
+        if(p->bVal.substituteHp <= 0) {
+            p->bVal.substituteHp = 0;
+
+        }
+        p->bVal.substituteWasHit = true;
+    } else {
+        p->bVal.bHp = p->bVal.bHp - damage;
+    }
+
 
     if(p->bVal.bHp < 0) {
         p->bVal.bHp = 0;
@@ -357,7 +394,13 @@ bool useMove(Move move, BattleContext *bc) {
                 if(bc->defender.team[bc->defender.battler].bVal.bHp > 0) {
                     log("\tChecking secondary effect chance");
                     shouldApplyEffect = (advanceSeed(bc) % 100) < move.secondaryAccuracy;
-                }
+                    // in certain scenarios, hitting a substitute prevents secondary effect from triggering
+                    // exact details are a bit fuzzy, but psybeam (10% confusion chance) does not trigger
+                    // even if it knocks out the substitute with its damage.  But flare blitz does apply burn (supposedly, haven't tested yet).
+                    // TODO: test this further, don't forget about this interaction when using substitute
+                    if(bc->defender.team[bc->defender.battler].bVal.substituteWasHit) {
+                        shouldApplyEffect = false; // do not apply effect instead.  We still roll the random value though.  
+                    }                }
 
             } else {
                 if (move.effect != BATTLE_EFFECT_HIT){
@@ -412,17 +455,47 @@ void setupBattle(BattleContext *bc) {
     bc->weather = Weather::None;
     bc->moveWasSuccessful = false;
 }
+// returns true if the move was disrupted by a status and the user
+// will be skipping their turn
 bool checkStatusDisruption(BattleContext *bc, Move move) {
-    PokeClient attacker = bc->attacker;
-    Pokemon attackingPokemon = attacker.team[attacker.battler];
+    PokeClient* attacker = &bc->attacker;
+    Pokemon* attackingPokemon = &attacker->team[attacker->battler];
+    if(attackingPokemon->bVal.volConditions & VOLATILE_CONDITION_FLINCH) {
+        attackingPokemon->bVal.volConditions &= ~VOLATILE_CONDITION_FLINCH; // flinch removes itself 
+        log(attackingPokemon->info.name + " was FLINCHED!");
+        return true;
+    }
     if(bc->attacker.team[bc->attacker.battler].bVal.turnsTaunted > 0) {
         // we got taunted :(((
         if(move.power == 0) {
             return true;
         }
     }
-    if(attackingPokemon.bVal.condition & MON_CONDITION_PARALYSIS) {
-        if(attackingPokemon.cAbility != AbilityId::MAGIC_GUARD) {
+    if(attackingPokemon->bVal.volConditions & VOLATILE_CONDITION_CONFUSION) {
+        attackingPokemon->bVal.volConditions -= (1 << VOLATILE_CONDITION_CONFUSION_SHIFT);
+        if(attackingPokemon->bVal.volConditions & VOLATILE_CONDITION_CONFUSION) {
+            // we are still confused after decrementing turn counter
+            if(advanceSeed(bc) & 1) {
+                // odd number, proceed as normal
+
+            } else {
+                // we hurt ourselves in confusion
+                int dmgRoll = advanceSeed(bc) % 16;
+                int dmg = calcDamage(bc, Struggle, 1, dmgRoll, true);
+                log("hurt self");
+                log(dmg);
+                dealDamage(&bc->attacker.team[bc->attacker.battler], dmg, false);
+                return true;
+            }
+        } else {
+            // we broke free of confusion!
+            if(DEBUG) {
+                std::cout << "Battler " << logName(*attackingPokemon) << " snaps out of its confusion! " << std::endl;
+            }
+        }
+    }
+    if(attackingPokemon->bVal.condition & MON_CONDITION_PARALYSIS) {
+        if(attackingPokemon->cAbility != AbilityId::MAGIC_GUARD) {
             if(advanceSeed(bc) % 4 == 0) {
                 if(DEBUG) {
                     std::cout << "\tFully Paralyzed!" << std::endl;
@@ -447,6 +520,9 @@ void updateFlagsWhenHit(BattleContext *bc, Move move) {
     } else {
         bc->defender.team[bc->defender.battler].bVal.moveHit = Empty;
     }
+
+    bc->defender.team[bc->defender.battler].bVal.substituteWasHit = false;
+
 }
 void resetContext(BattleContext *bc) {
     bc->moveWasSuccessful = false;
@@ -496,19 +572,25 @@ bool isFightOver(BattleContext *bc) {
     return false;
 }
 void triggerEndTurnConditions(PokeClient *p) {
+    // reset sub hit flag
+    p->team[p->battler].bVal.substituteWasHit = false;
+
+    // flinch wears off
+    p->team[p->battler].bVal.volConditions &= ~VOLATILE_CONDITION_FLINCH;
+
     if((p->team[p->battler].bVal.condition & MON_CONDITION_POISON) && p->team[p->battler].bVal.bHp) {
         int psnDmg = p->team[p->battler].cHp/8;
         if(DEBUG) {
             std::cout << "Poison deals " << psnDmg << " damage to " << logName(p->team[p->battler], psnDmg) << std::endl;
         }
-        dealDamage(&p->team[p->battler], psnDmg);
+        dealDamage(&p->team[p->battler], psnDmg, false);
 
     } else if((p->team[p->battler].bVal.condition & MON_CONDITION_BURN) && p->team[p->battler].bVal.bHp) {
         int brnDmg = p->team[p->battler].cHp/8;
         if(DEBUG) {
             std::cout << "Burn deals " << brnDmg << " damage to " << logName(p->team[p->battler], brnDmg) << std::endl;
         }
-        dealDamage(&p->team[p->battler], brnDmg);
+        dealDamage(&p->team[p->battler], brnDmg, false);
 
     }
     // taunt check
@@ -533,6 +615,9 @@ void triggerEndTurnConditions(PokeClient *p) {
             p->sideConditions &= ~SIDE_CONDITION_MIST;
         }
     }
+
+
+
 }
 
 // switch in a new mon if we need it
@@ -599,6 +684,7 @@ bool endOfTurn(BattleContext *bc) {
     if(isFightOver(bc)){
         return false;
     } else {
+        bc->turnNumber++;
         triggerEndTurnConditions(&bc->defender);
         if(bc->defender.team[bc->defender.battler].bVal.bHp <= 0) {
             shouldContinue = switchIn(bc, false);
@@ -636,6 +722,7 @@ bool endOfTurn(BattleContext *bc) {
 }
 // returns true if the battle should continue
 bool doTurn(BattleContext *bc) {
+    log("\t\t\t\t\t\t\t[ Turn " + std::to_string(bc->turnNumber) + " ]");
     if(!determineOrder(bc)) {
         // need to switch current order
         PokeClient pc = bc->attacker;

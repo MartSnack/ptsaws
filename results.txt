@@ -235,3 +235,5 @@ Player won. Lowest hp -> 45 // Seed: 126947
 Player won. Lowest hp -> 54 // Seed: 134278
 Player won. Lowest hp -> 44 // Seed: 145101
 Player won. Lowest hp -> 53 // Seed: 151335
+
+595058 -> 38 current lowest

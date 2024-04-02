@@ -37,7 +37,6 @@ BattleReport simulate(unsigned long startingSeed, CommandList cList) {
     BattleContext bc = setupVarFight(startingSeed);
     // BattleContext bc = setupJupiterFight(startingSeed);
 
-
     // this command doesn't matter, it gets replaced later
     bc.attacker.command = COMMAND_MOVE_SLOT_2; // attacker is us
     bc.defender.command = COMMAND_MOVE_SLOT_2; // defender is them
@@ -120,8 +119,8 @@ int main(int argc, char* argv[]) {
     using std::chrono::duration;
     using std::chrono::milliseconds;
     auto t1 = high_resolution_clock::now();
-    unsigned long end = 4294967295UL;
-    // unsigned long end = 1600000UL;
+    // unsigned long end = 4294967295UL;
+    unsigned long end = 10000UL;
 
     int divisor = 16; // how many chunks to use
     int offset = 0; // how far to offset
@@ -136,12 +135,12 @@ int main(int argc, char* argv[]) {
     // cList.commands[1] = COMMAND_MOVE_SLOT_3;
     // cList.commands[2] = COMMAND_MOVE_SLOT_3;
     // cList.commands[1] = COMMAND_USE_ITEM_GUARD_SPEC;
-    // cList.commands[3] = COMMAND_USE_ITEM_HYPER_POTION;
-    // cList.commands[6] = COMMAND_USE_ITEM_HYPER_POTION;
+    cList.commands[3] = COMMAND_USE_ITEM_HYPER_POTION;
+    cList.commands[6] = COMMAND_USE_ITEM_HYPER_POTION;
     // cList.commands[9] = COMMAND_USE_ITEM_HYPER_POTION;
 
     // simulate a specific seed
-    // simulate(201142, cList);
+    // simulate(1758469, cList);
     // return 0;
     for(i = 0; i < divisor; i++){
         ranges.push_back({i * chunkSize, (i+1) * chunkSize});

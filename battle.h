@@ -2,7 +2,9 @@
 #define BATTLE_H_
 
 #include "pokemon.h"
-#define DEBUG 0 // 0 for none, 1 for basic, 3 for detailed, 7 for dump
+
+
+#define DEBUG 0// 0 for none, 1 for basic, 3 for detailed, 7 for dump
 #define MAX_CLIENTS 4
 #define COMMAND_MOVE_SLOT_1 1 << 0
 #define COMMAND_MOVE_SLOT_2 1 << 1
@@ -23,13 +25,16 @@
 
 #define TRIGGER_INTIMIDATE 1<<0
 
-#define MOVE_STATUS_SUPER_EFFECTIVE 1
-#define MOVE_STATUS_NOT_EFFECTIVE 2
-#define MOVE_STATUS_IMMUNE 3
+#define MOVE_STATUS_MISSED              (1 << 0)
+#define MOVE_STATUS_SUPER_EFFECTIVE     (1 << 1)
+#define MOVE_STATUS_NOT_VERY_EFFECTIVE  (1 << 2)
+#define MOVE_STATUS_IMMUNE         (1 << 3)
+#define MOVE_STATUS_LEVITATED           (1 << 11)
 
 unsigned short advanceSeed(BattleContext *bc, std::string blurb = "none");
 bool useMove(Move move, BattleContext *bc);
-int calcDamage(BattleContext *bc, Move move, int crit, int randomRoll);
+int calcDamage(BattleContext *bc, Move move, int crit = 1, int randomRoll = 0, bool hurtSelf = false);
+void dealDamage(Pokemon *p,  int damage, bool directSource = true);
 int getTypeMultiplier(BattleContext *bc, Move move, int damage, int *moveStatus);
 bool determineOrder(BattleContext *bc);
 bool doTurn(BattleContext *bc);
@@ -89,6 +94,7 @@ struct BattleContext {
     RngSeed battleRng;
     PokeClient attacker;
     PokeClient defender;
+    PokeClient tempHolder; // useful when we want to attack ourselves and need to hold the actual defender client somewhere 
     bool moveWasSuccessful; // only has to be used (get past premove), doesn't have to hit
     int cDmg; // variable flat damage
     int cPwr; // variable power 

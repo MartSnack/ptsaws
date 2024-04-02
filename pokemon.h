@@ -14,6 +14,7 @@
 #define ITEM_PECHA_BERRY 3
 #define ITEM_CHERI_BERRY 4
 #define ITEM_PERSIM_BERRY 5
+#define ITEM_BOOST_DARK 6
 
 
 // int calcDamage(Pokemon attacker, Pokemon defender, Move move, int crit = 1, int randomRoll = 100);
@@ -49,6 +50,8 @@ enum AbilityId {
     SIMPLE,
     RUN_AWAY,
     HYPER_CUTTER,
+    OWN_TEMPO,
+    ADAPTABILITY,
 };
 // note that we really only care what stat nature is reducing
 // since we can just extrapolate that our bonus stat is whatever
@@ -87,6 +90,8 @@ enum Mons {
     STARAVIA,
     PACHIRISU,
     STARLY,
+    MISMAGIUS,
+    EEVEE,
 };
 
 
@@ -98,6 +103,9 @@ struct BattleVal {
     int volConditions;
     int moveEffectsMask;
     int item;
+
+    int substituteHp;
+    bool substituteWasHit;
 
     int bHp;
     int atkStg;

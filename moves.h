@@ -39,6 +39,7 @@ enum class DamageType:int {
 
 enum class MoveId {
     NO_MOVE,
+    STRUGGLE,
     FLAME_WHEEL,
     NIGHT_SLASH,
     TAUNT,
@@ -52,6 +53,12 @@ enum class MoveId {
     ENDEAVOR,
     SPARK,
     CHARM,
+    CONFUSE_RAY,
+    PSYBEAM,
+    SHADOW_BALL,
+    MAGICAL_LEAF,
+    BITE,
+    SUBSTITUTE,
 };
 struct Move {
         MoveId id;
@@ -72,6 +79,7 @@ struct Move {
         Move(MoveId _id, std::string name, int _power, int _accuracy , bool _secondary, int _secondaryAccuracy, int _effect, Type _moveType, DamageType defend, DamageType attack, int priority, bool _highCritRatio, int range);
 };
 extern Move Empty;
+extern Move Struggle;
 extern Move Tackle;
 extern Move FlameWheel;
 extern Move Taunt;
@@ -85,4 +93,10 @@ extern Move DoubleTeam;
 extern Move Endeavor;
 extern Move Charm;
 extern Move Spark;
+extern Move ConfuseRay;
+extern Move Psybeam;
+extern Move ShadowBall;
+extern Move MagicalLeaf;
+extern Move Substitute;
+extern Move Bite;
 #endif /* MOVES_H_ */

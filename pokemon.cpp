@@ -66,7 +66,9 @@ std::map<Mons, PokeInfo> pokemap = {
     {ZUBAT, PokeInfo("Zubat", 40,45,35,30,40,55,Type::Poison,Type::Flying,INNER_FOCUS)},
     {STARAVIA, PokeInfo("Staravia", 55,75,50,40,40,80, Type::Flying, Type::Normal, INTIMIDATE)},
     {PACHIRISU, PokeInfo("Pachirisu", 60,45,70,45,90,95, Type::Electric, Type::None, RUN_AWAY)}, // pickup as well, but who cares we can't catch one anyway
-    {STARLY, PokeInfo("Starly", 40, 55, 30, 30, 30, 60, Type::Normal, Type::Flying, KEEN_EYE)}
+    {STARLY, PokeInfo("Starly", 40, 55, 30, 30, 30, 60, Type::Normal, Type::Flying, KEEN_EYE)},
+    {MISMAGIUS, PokeInfo("Mismagius", 60, 60, 60, 105, 105, 105, Type::Ghost, Type::None, LEVITATE)},
+    {EEVEE, PokeInfo("Eevee", 55, 55, 50, 45, 65, 55, Type::Normal, Type::None, RUN_AWAY, ADAPTABILITY)}
 };
 
 
@@ -131,6 +133,7 @@ Pokemon::Pokemon(int _lvl, Nature _nature, int _ivs, Mons _id, Move _moveset[4],
     bVal.moveEffectsMask = 0;
     bVal.abilityKnownToAi = false;
     bVal.item = ITEM_NONE;
+    bVal.substituteHp = 0;
 }
 void Pokemon::sendOut() {
     bVal.atkStg = 6;
@@ -144,6 +147,8 @@ void Pokemon::sendOut() {
     bVal.volConditions = 0;
     bVal.turnsTaunted = 0;
     bVal.moveEffectsMask = 0;
+    bVal.substituteHp = 0;
+    bVal.substituteWasHit = false;
 
     bVal.movePrevByBattler = Empty;
     bVal.moveHit = Empty;
@@ -172,6 +177,23 @@ PokeClient getMonfernoEternaClient() {
     p1.battler = 0;
     p1.aiControl = false;
     p1.team[0] = monferno;
+    p1.name = "Player";
+    return p1;
+}
+PokeClient getPlayerFantinaClient() {
+    PokeClient p1;
+    Move moveset1[4] = {Tackle, FlameWheel, Taunt, Tackle};	
+    Move moveset2[4] = {Tackle, Bite, Substitute, Tackle};
+    Pokemon monferno = Pokemon(35, gentle, 0, MONFERNO, moveset1);
+    Pokemon eevee = Pokemon(32, naive, 0, EEVEE, moveset2);
+    eevee.setEvs(252, 0, 0, 0, 0, 252);
+    eevee.calcStats();
+    monferno.setEvs(36,8,16,28,8,64);
+    monferno.calcStats(); // recalc stats after setting evs
+    // monferno.bVal.condition |= MON_CONDITION_PARALYSIS;
+    p1.battler = 0;
+    p1.aiControl = false;
+    p1.team[0] = eevee;
     p1.name = "Player";
     return p1;
 }
@@ -211,12 +233,23 @@ PokeClient getTripleStarlyClient() {
     p2.battler = 0;
     p2.aiJumpNum = 4;
     p2.team[0] = star1;
-    // p2.team[1] = star2;
-    // p2.team[2] = star3;
+    p2.team[1] = star2;
+    p2.team[2] = star3;
     p2.name = "AI";
     return p2;
 }
-
+PokeClient getFantinaClient() {
+    PokeClient p2;
+    Move moveset[4] = {ShadowBall, Psybeam, MagicalLeaf, ConfuseRay};
+    Pokemon mismag = Pokemon(26, impish, 12, MISMAGIUS, moveset);
+    mismag.bVal.item = ITEM_SITRUS_BERRY;
+    p2.aiControl = true;
+    p2.aiLevel = 7;
+    p2.battler = 0;
+    p2.team[0] = mismag;
+    p2.name = "AI";
+    return p2;
+}
 BattleContext setupJupiterFight(unsigned long startingSeed) {
     Move moveset1[4] = {Tackle, FlameWheel, Taunt, Tackle};	
     Move moveset2[4] = {NightSlash,PoisonGas, Screech, Smokescreen};
@@ -243,7 +276,8 @@ BattleContext setupJupiterFight(unsigned long startingSeed) {
     RngSeed rs = {startingSeed,0};
     p1.pokeSwitch(p1.battler);
     p2.pokeSwitch(p2.battler); 
-    BattleContext bc = {Weather::None, rs, p1, p2, false};
+    BattleContext bc = {Weather::None, rs, p1, p2};
+    bc.moveWasSuccessful = false;
 
     // p1.team[p1.battler].sendOut();
     // p2.team[p2.battler].sendOut();
@@ -251,14 +285,19 @@ BattleContext setupJupiterFight(unsigned long startingSeed) {
     return bc;
 }
 BattleContext setupVarFight(unsigned long startingSeed) {
-    PokeClient p1 = getMonfernoEternaClient();
-    PokeClient p2 = getTripleStarlyClient();
+    PokeClient p1 = getPlayerFantinaClient();
+    PokeClient p2 = getFantinaClient();
     p1.pokeSwitch(p1.battler);
     p2.pokeSwitch(p2.battler);
+    p1.team[p1.battler].bVal.evaStg = 12;
+    p1.team[p1.battler].bVal.spDefStg = 7;
+    p1.team[p1.battler].bVal.substituteHp = 24;
+    p1.team[p1.battler].bVal.item = ITEM_BOOST_DARK;
     // p1.team[p1.battler].sendOut();
     // p2.team[p2.battler].sendOut();
     RngSeed rs = {startingSeed, 0};
-    BattleContext bc = {Weather::None, rs, p1, p2, false};
+    BattleContext bc = {Weather::None, rs, p1, p2};
+    bc.moveWasSuccessful = false;
     bc.turnNumber = 0;
     return bc;
 }
