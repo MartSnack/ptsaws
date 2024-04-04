@@ -376,9 +376,47 @@ bool AI_HasSuperEffectiveMove(BattleContext *bc, AiContext *ac, bool flag) {
     }
     return false;
 }
+bool AI_ShouldUseItem(BattleContext *bc, AiContext *ac) {
+    int aliveMons = 0;
+    int itemCount = 0;
+    int i;
+    for(i = 0; i < 6; i++) {
+        if(ac->self.team[i].bVal.bHp > 0) { 
+            aliveMons++;
+        }
+    }
+    int item;
+    bool result = false;
+    int command = 0;
+    for(i = 0; i < 4; i++) {
+        if(i == 0 || aliveMons <= ac->self.numUseItems - i + 1) {
+            item = ac->self.useItems[i];
+            if(item == ITEM_NONE) {
+                continue;
+            }
+            if(item == ITEM_SUPER_POTION) {
+                if(ac->self.team[ac->self.battler].bVal.bHp &&
+                ac->self.team[ac->self.battler].bVal.bHp < (ac->self.team[ac->self.battler].cHp / 4) ||
+                (ac->self.team[ac->self.battler].cHp - ac->self.team[ac->self.battler].bVal.bHp) > 50 ){
+                    result = true;
+                    command = COMMAND_USE_ITEM_SUPER_POTION;
+                }
+            }
+
+            if(result == true) {
+                bc->attacker.useItems[i] = 0;
+                ac->self.command = command;
+            }
+        }
+    }
+    return result;
+}
 int AI_SelectCommand(BattleContext *bc, AiContext *ac) {
     if(AI_ShouldSwitch(bc, ac)) {
         return 1;
+    }
+    if(AI_ShouldUseItem(bc, ac)) {
+        return 2;
     }
     return 3;
 }
@@ -421,6 +459,8 @@ void processAI(BattleContext *bc) {
     if(choice == 1) {
         // switch
         // TODO do switching logic here
+    } else if(choice == 2) {
+        bc->attacker.command = ac.self.command;
     } else {
         ailog("dmgloss rolls >> Rng advances 4");
         for(i = 0; i < 4; i++) {

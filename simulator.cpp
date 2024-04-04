@@ -26,14 +26,15 @@ struct SimulationReport {
     unsigned long startingSeed;
     bool playerWin;
     int playerHp;
+    int turnTracker[32]; // max_turns
 };
 struct CommandList {
     int defaultCommand;
-    int commands[32];
+    int commands[32]; // max_turns
 };
 
 
-BattleReport simulate(unsigned long startingSeed, CommandList cList) {
+BattleReport simulate(unsigned long startingSeed, CommandList cList, SimulationReport *sr) {
     BattleContext bc = setupVarFight(startingSeed);
     // BattleContext bc = setupJupiterFight(startingSeed);
 
@@ -51,6 +52,7 @@ BattleReport simulate(unsigned long startingSeed, CommandList cList) {
     int command = 0;
 
     while(shouldContinue) {
+        sr->turnTracker[i]++; // log this turn in the report
         command = cList.commands[i];
         if(command == 0) {
             command = cList.defaultCommand;
@@ -62,6 +64,7 @@ BattleReport simulate(unsigned long startingSeed, CommandList cList) {
         }
         shouldContinue = doTurn(&bc);
         i++;
+
         if(i > 31) {
             shouldContinue = false;
         }
@@ -86,9 +89,12 @@ BattleReport simulate(unsigned long startingSeed, CommandList cList) {
 SimulationReport runSimulations(Range r, CommandList cList) {
     unsigned long i;
     SimulationReport sr = {0,true,1000};
+    for(int i = 0; i < 32; i++) { // max_turn
+        sr.turnTracker[i] = 0; // init turn tracker
+    }
     BattleReport br;
     for(i=r.start;i<r.stop;i++) {
-        br = simulate(i, cList);
+        br = simulate(i, cList, &sr);
         if(!br.playerWin){
             sr.startingSeed = i;
             sr.playerWin = br.playerWin;
@@ -114,33 +120,34 @@ int main(int argc, char* argv[]) {
     // return 0;
     SimulationReport val;
     std::cout<<"<booting>"<<std::endl;
+
     using std::chrono::high_resolution_clock;
     using std::chrono::duration_cast;
     using std::chrono::duration;
     using std::chrono::milliseconds;
     auto t1 = high_resolution_clock::now();
     // unsigned long end = 4294967295UL;
-    unsigned long end = 10000UL;
+    unsigned long end = 16000000UL;
 
     int divisor = 16; // how many chunks to use
     int offset = 0; // how far to offset
     unsigned long chunkSize = end/divisor;
     std::vector<Range> ranges;
     CommandList cList = {};
-    for(i=0;i<31;i++) {
+    for(i=0;i<31;i++) { // max_turns
         cList.commands[i] = 0;
     }
     cList.defaultCommand = COMMAND_MOVE_SLOT_2;
     // cList.commands[0] = COMMAND_MOVE_SLOT_3;
     // cList.commands[1] = COMMAND_MOVE_SLOT_3;
-    // cList.commands[2] = COMMAND_MOVE_SLOT_3;
+    cList.commands[2] = COMMAND_USE_GATEAU_OR_BITE;
     // cList.commands[1] = COMMAND_USE_ITEM_GUARD_SPEC;
-    cList.commands[3] = COMMAND_USE_ITEM_HYPER_POTION;
-    cList.commands[6] = COMMAND_USE_ITEM_HYPER_POTION;
-    // cList.commands[9] = COMMAND_USE_ITEM_HYPER_POTION;
+    // cList.commands[3] = COMMAND_USE_ITEM_HYPER_POTION;
+    cList.commands[5] = COMMAND_USE_HYPER_OR_BITE;
+    cList.commands[8] = COMMAND_USE_HYPER_OR_BITE;
 
     // simulate a specific seed
-    // simulate(1758469, cList);
+    // simulate(658721, cList, &val);
     // return 0;
     for(i = 0; i < divisor; i++){
         ranges.push_back({i * chunkSize, (i+1) * chunkSize});
@@ -151,6 +158,7 @@ int main(int argc, char* argv[]) {
     }
     std::ofstream myfile;
     myfile.open("./simulatorResults.txt");
+    int turnTotals[32]= {0}; // max_turns
     for(auto &e : futures) {
         val = e.get();
         if(!val.playerWin){
@@ -160,6 +168,14 @@ int main(int argc, char* argv[]) {
             myfile << "Player won" << "\n";
             std::cout << "Player won. Lowest hp -> " << val.playerHp << " // Seed: " << val.startingSeed << std::endl;
         }
+
+        for(int i = 0;i<32;i++){ // max_turns
+            turnTotals[i] += val.turnTracker[i];
+        }
+
+    }
+    for(int i = 0;i<32;i++){ // max_turns
+        myfile << "Turn " << i+1 << "\t" << turnTotals[i] << "\n";
     }
     auto t2 = high_resolution_clock::now();
      /* Getting number of milliseconds as an integer. */

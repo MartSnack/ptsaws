@@ -77,7 +77,7 @@ bool AI_HasAbsorbAbilityInParty(BattleContext *bc, AiContext *ac);
 bool AI_HasSuperEffectiveMove(BattleContext *bc, AiContext *ac, bool flag);
 int AI_SelectCommand(BattleContext *bc, AiContext *ac);
 bool AI_ShouldSwitch(BattleContext *bc, AiContext *ac);
-
+bool AI_ShouldUseItem(BattleContext *bc, AiContext *ac);
 bool AI_IfRndUnder(BattleContext *bc, int value);
 bool AI_IfRndOver(BattleContext *bc, int value);
 bool AI_IfHpUnder(BattleContext *bc, AiContext *ac, int value, bool target);

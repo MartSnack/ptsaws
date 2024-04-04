@@ -18,10 +18,16 @@
 #define COMMAND_USE_ITEM_GUARD_SPEC 1 << 5
 #define COMMAND_USE_ITEM_HYPER_POTION 1 << 6
 #define COMMAND_USE_ITEM_PRLZ_HEAL 1 << 7
+
+#define COMMAND_USE_ITEM_FULL_HEAL 1 << 9
 #define COMMAND_USE_ITEM ( COMMAND_USE_ITEM_SUPER_POTION \
                          | COMMAND_USE_ITEM_GUARD_SPEC \
                          | COMMAND_USE_ITEM_HYPER_POTION \
-                         | COMMAND_USE_ITEM_PRLZ_HEAL)
+                         | COMMAND_USE_ITEM_PRLZ_HEAL \
+                         | COMMAND_USE_ITEM_FULL_HEAL)
+// option selects
+#define COMMAND_USE_GATEAU_OR_BITE 1 << 8
+#define COMMAND_USE_HYPER_OR_BITE 1 << 9
 
 #define TRIGGER_INTIMIDATE 1<<0
 
@@ -81,6 +87,8 @@ struct PokeClient {
     Move previouslySelectedMove;
     int battler; // the index of the current battler in the team list
     Pokemon team[6]; // the team list
+    int useItems[4]; // items the AI can use
+    int numUseItems;
     int command; // which command we're using this turn
     PokeClient(void);
     void pokeSwitch(int nextBattler);

@@ -75,6 +75,10 @@ PokeClient::PokeClient(void): previouslySelectedMove() {
     isWinner = false;
     triggers = 0;
     aiJumpNum = 2;
+    useItems[0] = 0;
+    useItems[1] = 0;
+    useItems[2] = 0;
+    useItems[3] = 0;
 }
 
 void PokeClient::pokeSwitch(int nextBattler) {
@@ -442,10 +446,24 @@ bool useItem(BattleContext *bc, int item) {
         } else {
             return false;
         }
+    } else if(item & COMMAND_USE_ITEM_SUPER_POTION) {
+        log(bc->attacker.name + " uses Super Potion");
+        if(bc->attacker.team[bc->attacker.battler].bVal.bHp < bc->attacker.team[bc->attacker.battler].cHp) {
+            heal(&bc->attacker.team[bc->attacker.battler], 50);
+            return true;
+        } else {
+            return false;
+        }
     } else if(item & COMMAND_USE_ITEM_PRLZ_HEAL) {
         log(bc->attacker.name + " uses Prlz Heal");
         if(bc->attacker.team[bc->attacker.battler].bVal.condition & MON_CONDITION_PARALYSIS) {
             bc->attacker.team[bc->attacker.battler].bVal.condition = MON_CONDITION_NONE; // clear paralysis
+        }
+    } else if(item & COMMAND_USE_ITEM_FULL_HEAL) {
+        log(bc->attacker.name + " uses Full Heal");
+        if(bc->attacker.team[bc->attacker.battler].bVal.condition > 0 || bc->attacker.team[bc->attacker.battler].bVal.volConditions & VOLATILE_CONDITION_CONFUSION) {
+            bc->attacker.team[bc->attacker.battler].bVal.condition = 0;
+            bc->attacker.team[bc->attacker.battler].bVal.volConditions &= ~VOLATILE_CONDITION_CONFUSION;
         }
     }
     return false;
@@ -528,11 +546,37 @@ void resetContext(BattleContext *bc) {
     bc->moveWasSuccessful = false;
     bc->attacker.successfulMove = false;
 }
+int parseCommand(PokeClient *pc) {
+    int com = pc->command;
+    switch(com) {
+        case COMMAND_USE_GATEAU_OR_BITE:
+            if(pc->team[pc->battler].bVal.condition > 0 || pc->team[pc->battler].bVal.volConditions & VOLATILE_CONDITION_CONFUSION) {
+                com = COMMAND_USE_ITEM_FULL_HEAL;
+            } else {
+                com = COMMAND_MOVE_SLOT_2;
+            }
+            break;
+        case COMMAND_USE_HYPER_OR_BITE:
+            if(pc->team[pc->battler].bVal.bHp < pc->team[pc->battler].cHp) {
+                com = COMMAND_USE_ITEM_HYPER_POTION;
+            } else {
+                com = COMMAND_MOVE_SLOT_2;
+            }
+        default:
+            break;
+    }
+    return com;
+}
+void getCommand(BattleContext *bc) {
+    bc->attacker.command = parseCommand(&bc->attacker);
+    bc->defender.command = parseCommand(&bc->defender);
+}
 void executeCommand(BattleContext *bc) {
     resetContext(bc);
-    if(bc->attacker.command & COMMAND_MOVE) {
+    int command = bc->attacker.command;
+    if(command & COMMAND_MOVE) {
 
-        int moveNum = log2(bc->attacker.command);
+        int moveNum = log2(command);
         bool success = useMove(bc->attacker.team[bc->attacker.battler].moveset[moveNum], bc);
         if(success) {
             log("\tMove Succeeded > RNG advances 2");
@@ -540,8 +584,8 @@ void executeCommand(BattleContext *bc) {
             advanceSeed(bc);
         }
 
-    } else if(bc->attacker.command & COMMAND_USE_ITEM) {
-        useItem(bc, bc->attacker.command);
+    } else if(command & COMMAND_USE_ITEM) {
+        useItem(bc, command);
     }
 
 }
@@ -722,6 +766,7 @@ bool endOfTurn(BattleContext *bc) {
 }
 // returns true if the battle should continue
 bool doTurn(BattleContext *bc) {
+    getCommand(bc); // figures out what command to use, if we're option-selecting
     log("\t\t\t\t\t\t\t[ Turn " + std::to_string(bc->turnNumber) + " ]");
     if(!determineOrder(bc)) {
         // need to switch current order

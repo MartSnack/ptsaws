@@ -15,7 +15,7 @@
 #define ITEM_CHERI_BERRY 4
 #define ITEM_PERSIM_BERRY 5
 #define ITEM_BOOST_DARK 6
-
+#define ITEM_SUPER_POTION 7
 
 // int calcDamage(Pokemon attacker, Pokemon defender, Move move, int crit = 1, int randomRoll = 100);
 
