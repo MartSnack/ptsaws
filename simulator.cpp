@@ -11,6 +11,7 @@
 #include "battle.h"
 #include "tr_ai.h"
 
+int totalSims = 10000UL;
 // test comment
 struct Range {
     unsigned long start;
@@ -127,7 +128,7 @@ int main(int argc, char* argv[]) {
     using std::chrono::milliseconds;
     auto t1 = high_resolution_clock::now();
     // unsigned long end = 4294967295UL;
-    unsigned long end = 16000000UL;
+    unsigned long end = totalSims;
 
     int divisor = 16; // how many chunks to use
     int offset = 0; // how far to offset
