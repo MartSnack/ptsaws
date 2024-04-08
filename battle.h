@@ -2,9 +2,7 @@
 #define BATTLE_H_
 
 #include "pokemon.h"
-
-
-#define DEBUG 0// 0 for none, 1 for basic, 3 for detailed, 7 for dump
+#include "config.h"
 #define MAX_CLIENTS 4
 #define COMMAND_MOVE_SLOT_1 1 << 0
 #define COMMAND_MOVE_SLOT_2 1 << 1

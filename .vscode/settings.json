@@ -73,6 +73,9 @@
         "xlocbuf": "cpp",
         "xlocmes": "cpp",
         "xlocmon": "cpp",
-        "xloctime": "cpp"
+        "xloctime": "cpp",
+        "codecvt": "cpp",
+        "filesystem": "cpp",
+        "string_view": "cpp"
     }
 }
