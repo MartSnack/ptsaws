@@ -247,8 +247,8 @@ PokeClient getFantinaClient() {
     p2.aiLevel = 7;
     p2.battler = 0;
     p2.team[0] = mismag;
-    //p2.useItems[0] = ITEM_SUPER_POTION;
-    //p2.numUseItems = 1;
+    p2.useItems[0] = ITEM_SUPER_POTION;
+    p2.numUseItems = 1;
     p2.name = "AI";
     return p2;
 }

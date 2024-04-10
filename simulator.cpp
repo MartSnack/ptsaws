@@ -17,7 +17,7 @@
 namespace fs = std::filesystem;
 unsigned long totalSims = 160000000UL;
 // unsigned long totalSims = 4294967295UL;
-
+const int maxTurns = 32;
 int parallel = 16;
 // test comment
 struct Range {
@@ -45,11 +45,11 @@ struct SimulationReport {
     unsigned long startingSeed; // the starting seed for the returned result (either the first seed we lose on, or the seed we have the lowest hp on if we win all of them)
     bool playerWin;
     int playerHp;
-    int turnTracker[32]; // max_turns
+    int turnTracker[maxTurns]; // max_turns
 };
 struct CommandList {
     int defaultCommand;
-    int commands[32]; // max_turns
+    int commands[maxTurns]; // max_turns
 };
 
 
@@ -203,6 +203,26 @@ std::vector<unsigned long> getSubVector(const std::vector<unsigned long>& vec, s
     // Create a sub-vector using iterators
     return std::vector<unsigned long>(vec.begin() + startIndex, vec.begin() + endIndex + 1);
 }
+
+std::string parseCommand(int cmd) {
+    switch(cmd){
+        case COMMAND_MOVE_SLOT_1:
+            return "M1";
+        case COMMAND_MOVE_SLOT_2:
+            return "M2";
+        case COMMAND_MOVE_SLOT_3:
+            return "M3";
+        case COMMAND_MOVE_SLOT_4:
+            return "M4";
+        case COMMAND_USE_GATEAU_OR_BITE:
+            return "FH";
+        case COMMAND_USE_HYPER_OR_BITE:
+            return "SP";
+        default:
+            return "na";
+    }
+    return "??";
+}
 int main(int argc, char* argv[]) {
     DEBUG = 0;
     EXIT_EARLY = 0;
@@ -258,7 +278,9 @@ int main(int argc, char* argv[]) {
             char* endPtr;
             individualSeed = std::strtol(argv[i+1], &endPtr, 10);
             runIndividualSeed = true;
-            DEBUG = 1; // automatically set the debug level to 1
+            if(DEBUG == 0) {
+                DEBUG = 1; // automatically set the debug level to 1
+            }
         }
         if(arg == "-e") {
             // exit early, will cause threads to terminate on the first seed they encounter that loses
@@ -313,7 +335,7 @@ int main(int argc, char* argv[]) {
     int remainder = end % divisor; // extra seeds
     std::vector<Range> ranges;
     CommandList cList = {};
-    for(i=0;i<31;i++) { // max_turns
+    for(i=0;i<maxTurns ;i++) { // max_turns
         cList.commands[i] = 0;
     }
     cList.defaultCommand = COMMAND_MOVE_SLOT_2;
@@ -322,8 +344,12 @@ int main(int argc, char* argv[]) {
     cList.commands[2] = COMMAND_USE_GATEAU_OR_BITE;
     // cList.commands[1] = COMMAND_USE_ITEM_GUARD_SPEC;
     // cList.commands[3] = COMMAND_USE_ITEM_HYPER_POTION;
-    // cList.commands[4] = COMMAND_USE_HYPER_OR_BITE;
-    // cList.commands[7] = COMMAND_USE_HYPER_OR_BITE;
+    cList.commands[3] = COMMAND_USE_HYPER_OR_BITE;
+    cList.commands[4] = COMMAND_USE_GATEAU_OR_BITE;
+    cList.commands[5] = COMMAND_USE_HYPER_OR_BITE;
+    cList.commands[6] = COMMAND_USE_GATEAU_OR_BITE;
+    // cList.commands[5] = COMMAND_USE_GATEAU_OR_BITE;
+    cList.commands[8] = COMMAND_USE_HYPER_OR_BITE;
 
     // simulate a specific seed
     if(runIndividualSeed) {
@@ -354,7 +380,7 @@ int main(int argc, char* argv[]) {
     std::string seedsPastTurnFilename = dirName + "/seeds_past_turn_" + std::to_string(WATCH_TURN) + ".csv";
     fs::create_directories(dirName);
     std::ofstream resultsFile(resultsFilename);
-    int turnTotals[32]= {0}; // max_turns
+    int turnTotals[maxTurns]= {0}; // max_turns
     for(auto &e : futures) {
         val = e.get();
         if(!val.playerWin){
@@ -365,12 +391,12 @@ int main(int argc, char* argv[]) {
             std::cout << "Player won. Lowest hp -> " << val.playerHp << " // Seed: " << val.startingSeed << std::endl;
         }
 
-        for(i = 0;i<32;i++){ // max_turns
+        for(i = 0;i<maxTurns;i++){ // max_turns
             turnTotals[i] += val.turnTracker[i];
         }
 
     }
-    for(i = 0;i<32;i++){ // max_turns
+    for(i = 0;i<maxTurns;i++){ // max_turns
         resultsFile << "Turn " << i+1 << "\t" << turnTotals[i] << "\n";
     }
     auto t2 = high_resolution_clock::now();
@@ -390,6 +416,15 @@ int main(int argc, char* argv[]) {
         }
     }
     resultsFile << "Number of losses: " << lossSeedCount << std::endl;
+    resultsFile << std::endl;
+    for(i=0; i < maxTurns ; i++ ) {
+        if(cList.commands[i] == 0) {
+            resultsFile << parseCommand(cList.defaultCommand);
+        } else {
+            resultsFile << parseCommand(cList.commands[i]);
+        }
+        resultsFile << " / ";
+    }
     resultsFile << std::endl;
     // lossesfile
     std::ofstream lossSeedsFile(lossSeedsFilename);
