@@ -35,7 +35,7 @@ enum AbilityId {
     HYDRATION,
     MOLD_BREAKER,
     VOLT_ABSORB,
-    WATER_ABSORB,
+    WATER_ABSORB, // not implemented yet
     MOTOR_DRIVE,
     FLASH_FIRE,
     WONDER_GUARD,
@@ -52,6 +52,9 @@ enum AbilityId {
     HYPER_CUTTER,
     OWN_TEMPO,
     ADAPTABILITY,
+    SAND_STREAM,
+    HUSTLE, // ni
+    SERENCE_GRACE, // ni
 };
 // note that we really only care what stat nature is reducing
 // since we can just extrapolate that our bonus stat is whatever
@@ -92,6 +95,9 @@ enum Mons {
     STARLY,
     MISMAGIUS,
     EEVEE,
+    HIPPOPOTAS,
+    TOGETIC, 
+    VAPOREON,
 };
 
 

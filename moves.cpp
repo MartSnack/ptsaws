@@ -44,3 +44,7 @@ Move MagicalLeaf = Move(MoveId::MAGICAL_LEAF, "Magical Leaf", 60, 0, false, 0, B
 Move ShadowBall = Move(MoveId::SHADOW_BALL, "Shadow Ball", 80, 100, true, 20, BATTLE_EFFECT_LOWER_SP_DEF_HIT, Type::Ghost, DamageType::SPECIAL, DamageType::SPECIAL);
 Move Bite = Move(MoveId::BITE, "Bite", 60, 100, true, 30, BATTLE_EFFECT_FLINCH_HIT, Type::Dark, DamageType::PHYSICAL, DamageType::PHYSICAL);
 Move Substitute = Move(MoveId::SUBSTITUTE, "Substitute", 0, 0, false, 0, BATTLE_EFFECT_SET_SUBSTITUTE, Type::Normal, DamageType::NONE, DamageType::NONE, 0, false, RANGE_SELF);
+Move SandAttack = Move(MoveId::SAND_ATTACK, "Sand Attack", 0, 100, false, 0, BATTLE_EFFECT_ACC_DOWN, Type::Ground);
+Move TakeDown = Move(MoveId::TAKE_DOWN, "Take Down", 90, 85, false, 0, BATTLE_EFFECT_RECOIL_QUARTER, Type::Normal, DamageType::PHYSICAL, DamageType::PHYSICAL);
+Move Yawn = Move(MoveId::YAWN, "Yawn", 0,0, false, 0, BATTLE_EFFECT_STATUS_SLEEP_NEXT_TURN, Type::Normal, DamageType::NONE, DamageType::NONE);
+Move Toxic = Move(MoveId::TOXIC, "Toxic", 0, 85, false, 0, BATTLE_EFFECT_STATUS_BADLY_POISON, Type::Poison);

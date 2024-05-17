@@ -18,6 +18,7 @@ namespace fs = std::filesystem;
 unsigned long totalSims = 160000000UL;
 // unsigned long totalSims = 4294967295UL;
 const int maxTurns = 32;
+const int maxBranches = 32;
 int parallel = 16;
 // test comment
 struct Range {
@@ -45,16 +46,81 @@ struct SimulationReport {
     unsigned long startingSeed; // the starting seed for the returned result (either the first seed we lose on, or the seed we have the lowest hp on if we win all of them)
     bool playerWin;
     int playerHp;
-    int turnTracker[maxTurns]; // max_turns
+    unsigned long turnTracker[maxTurns]; // max_turns
 };
 struct CommandList {
-    int defaultCommand;
-    int commands[maxTurns]; // max_turns
+    unsigned long defaultCommand;
+    unsigned long commands[maxTurns][maxBranches]; // max_turns
 };
-
+unsigned long parseCommand(BattleContext *bc, PokeClient *pc, unsigned long commands[maxBranches]) {
+    int com = 0;
+    bool branched = true;
+    while(branched) {
+        com = commands[bc->branch];
+        if (com & COMMAND_BRANCH_INC) {
+            bc->branch++;
+            com &= ~COMMAND_BRANCH_INC;
+        } else if(com & COMMAND_BRANCH_DEC) {
+            bc->branch--;
+            com &= ~COMMAND_BRANCH_DEC;
+        }
+        branched = false; // default to breaking while loop
+        switch(com) {
+            case COMMAND_USE_GATEAU_OR_BITE:
+                if(pc->team[pc->battler].bVal.condition > 0 || pc->team[pc->battler].bVal.volConditions & VOLATILE_CONDITION_CONFUSION) {
+                    com = COMMAND_USE_ITEM_FULL_HEAL;
+                } else {
+                    com = COMMAND_MOVE_SLOT_2;
+                }
+                break;
+            case COMMAND_USE_HYPER_OR_BITE:
+                if(pc->team[pc->battler].bVal.bHp < pc->team[pc->battler].cHp) {
+                    com = COMMAND_USE_ITEM_HYPER_POTION;
+                } else {
+                    com = COMMAND_MOVE_SLOT_2;
+                }
+                break;
+            case COMMAND_USE_ITEM_FULL_HEAL:
+                if(!pc->team[pc->battler].bVal.condition > 0 && !pc->team[pc->battler].bVal.volConditions & VOLATILE_CONDITION_CONFUSION) {
+                    // full heal will have no use, branch
+                    branched = true;
+                    bc->branch++;
+                }
+                break;
+            case COMMAND_USE_ITEM_HYPER_POTION:
+                if(pc->team[pc->battler].bVal.bHp == pc->team[pc->battler].cHp) {
+                    // hp is max, branch
+                    branched = true;
+                    bc->branch++;
+                }
+                break;
+            default:
+                break;
+        }
+    }
+    return com;
+}
+void getCommand(BattleContext *bc, CommandList cList, int turnNumber) {
+    int com = 0;
+    if(bc->attacker.aiControl) {
+        com = parseCommand(bc, &bc->defender, cList.commands[turnNumber]);
+        if(com == 0) {
+            com = cList.defaultCommand;
+        }
+        bc->defender.command = com;
+    } else {
+        com = parseCommand(bc, &bc->attacker, cList.commands[turnNumber]);
+        if(com == 0) {
+            com = cList.defaultCommand;
+        }
+        bc->attacker.command = com;
+    }
+}
 
 BattleReport simulate(unsigned long startingSeed, CommandList cList, SimulationReport *sr) {
     BattleContext bc = setupVarFight(startingSeed);
+    bc.terminate = false;
+    bc.branch = 0;
     // BattleContext bc = setupJupiterFight(startingSeed);
 
     // this command doesn't matter, it gets replaced later
@@ -68,19 +134,9 @@ BattleReport simulate(unsigned long startingSeed, CommandList cList, SimulationR
     processAI(&bc); // calculate which command to use on first turn
     bool shouldContinue = true;
     int i = 0;
-    int command = 0;
-
     while(shouldContinue) {
         sr->turnTracker[i]++; // log this turn in the report
-        command = cList.commands[i];
-        if(command == 0) {
-            command = cList.defaultCommand;
-        }
-        if(bc.attacker.aiControl){
-            bc.defender.command = command;
-        } else {
-            bc.attacker.command = command;
-        }
+        getCommand(&bc, cList, i);
         shouldContinue = doTurn(&bc);
         i++;
 
@@ -97,9 +153,9 @@ BattleReport simulate(unsigned long startingSeed, CommandList cList, SimulationR
     } else if(!bc.attacker.isWinner && !bc.defender.isWinner) {
         didPlayerWin = false; // somehow the fight didn't finish
     } else if(bc.attacker.isWinner && !bc.attacker.aiControl) {
-        br.playerHp = bc.attacker.team[bc.attacker.battler].bVal.bHp;
-    } else {
         br.playerHp = bc.defender.team[bc.defender.battler].bVal.bHp;
+    } else {
+        br.playerHp = bc.attacker.team[bc.attacker.battler].bVal.bHp;
     }
     br.playerWin = didPlayerWin;
     br.endTurn = i;
@@ -204,7 +260,7 @@ std::vector<unsigned long> getSubVector(const std::vector<unsigned long>& vec, s
     return std::vector<unsigned long>(vec.begin() + startIndex, vec.begin() + endIndex + 1);
 }
 
-std::string parseCommand(int cmd) {
+std::string parseCommandString(int cmd) {
     switch(cmd){
         case COMMAND_MOVE_SLOT_1:
             return "M1";
@@ -227,6 +283,7 @@ int main(int argc, char* argv[]) {
     DEBUG = 0;
     EXIT_EARLY = 0;
     int i;
+    int j;
     std::string arg;
     std::string outputDirName = "default";
     std::string inputSeeds = "seeds.csv";
@@ -336,20 +393,27 @@ int main(int argc, char* argv[]) {
     std::vector<Range> ranges;
     CommandList cList = {};
     for(i=0;i<maxTurns ;i++) { // max_turns
-        cList.commands[i] = 0;
+        for(j=0;j<maxBranches; j++) {
+            cList.commands[i][j] = 0;
+        }
     }
     cList.defaultCommand = COMMAND_MOVE_SLOT_2;
-    // cList.commands[0] = COMMAND_MOVE_SLOT_3;
+    cList.commands[0][0] = COMMAND_USE_ITEM_GUARD_SPEC;
+    cList.commands[1][0] = COMMAND_SWITCH_2;
+    cList.commands[2][0] = COMMAND_USE_ITEM_X_ACCURACY;
+    cList.commands[3][0] = COMMAND_USE_ITEM_HYPER_POTION;
+    cList.commands[4][0] = COMMAND_USE_ITEM_FULL_HEAL;
+    cList.commands[4][1] = COMMAND_MOVE_SLOT_2;
+    cList.commands[5][0] = COMMAND_MOVE_SLOT_2;
+    cList.commands[5][1] = COMMAND_TERMINATE;
+    cList.commands[6][0] = COMMAND_TERMINATE;
     // cList.commands[1] = COMMAND_MOVE_SLOT_3;
-    cList.commands[2] = COMMAND_USE_GATEAU_OR_BITE;
+
     // cList.commands[1] = COMMAND_USE_ITEM_GUARD_SPEC;
     // cList.commands[3] = COMMAND_USE_ITEM_HYPER_POTION;
-    cList.commands[3] = COMMAND_USE_HYPER_OR_BITE;
-    cList.commands[4] = COMMAND_USE_GATEAU_OR_BITE;
-    cList.commands[5] = COMMAND_USE_HYPER_OR_BITE;
-    cList.commands[6] = COMMAND_USE_GATEAU_OR_BITE;
-    // cList.commands[5] = COMMAND_USE_GATEAU_OR_BITE;
-    cList.commands[8] = COMMAND_USE_HYPER_OR_BITE;
+
+    // cList.commands[2] = COMMAND_USE_GATEAU_OR_BITE;
+    // cList.commands[3] = COMMAND_USE_HYPER_OR_BITE;
 
     // simulate a specific seed
     if(runIndividualSeed) {
@@ -419,9 +483,9 @@ int main(int argc, char* argv[]) {
     resultsFile << std::endl;
     for(i=0; i < maxTurns ; i++ ) {
         if(cList.commands[i] == 0) {
-            resultsFile << parseCommand(cList.defaultCommand);
+            resultsFile << parseCommandString(cList.defaultCommand);
         } else {
-            resultsFile << parseCommand(cList.commands[i]);
+            resultsFile << parseCommandString(cList.commands[i][0]);
         }
         resultsFile << " / ";
     }

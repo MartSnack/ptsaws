@@ -4,6 +4,7 @@
 #include "pokemon.h"
 #include "config.h"
 #define MAX_CLIENTS 4
+#define COMMAND_TERMINATE 19875 // cease the battle early
 #define COMMAND_MOVE_SLOT_1 1 << 0
 #define COMMAND_MOVE_SLOT_2 1 << 1
 #define COMMAND_MOVE_SLOT_3 1 << 2
@@ -12,22 +13,41 @@
                         | COMMAND_MOVE_SLOT_2 \
                         | COMMAND_MOVE_SLOT_3 \
                         | COMMAND_MOVE_SLOT_4)
-#define COMMAND_USE_ITEM_SUPER_POTION 1 << 4
-#define COMMAND_USE_ITEM_GUARD_SPEC 1 << 5
-#define COMMAND_USE_ITEM_HYPER_POTION 1 << 6
-#define COMMAND_USE_ITEM_PRLZ_HEAL 1 << 7
-
-#define COMMAND_USE_ITEM_FULL_HEAL 1 << 9
+#define COMMAND_SWITCH_OFFSET 4
+#define COMMAND_SWITCH_1 1 << 4
+#define COMMAND_SWITCH_2 1 << 5
+#define COMMAND_SWITCH_3 1 << 6
+#define COMMAND_SWITCH_4 1 << 7
+#define COMMAND_SWITCH_5 1 << 8
+#define COMMAND_SWITCH_6 1 << 9
+#define COMMAND_SWITCH ( COMMAND_SWITCH_1 \
+                       | COMMAND_SWITCH_2 \
+                       | COMMAND_SWITCH_3 \
+                       | COMMAND_SWITCH_4 \
+                       | COMMAND_SWITCH_5 \
+                       | COMMAND_SWITCH_6 \
+                       )
+#define COMMAND_USE_ITEM_SUPER_POTION 1 << 10
+#define COMMAND_USE_ITEM_GUARD_SPEC 1 << 11
+#define COMMAND_USE_ITEM_HYPER_POTION 1 << 12
+#define COMMAND_USE_ITEM_PRLZ_HEAL 1 << 13
+#define COMMAND_USE_ITEM_FULL_HEAL 1 << 14
+#define COMMAND_USE_ITEM_X_ACCURACY 1 << 15
 #define COMMAND_USE_ITEM ( COMMAND_USE_ITEM_SUPER_POTION \
                          | COMMAND_USE_ITEM_GUARD_SPEC \
                          | COMMAND_USE_ITEM_HYPER_POTION \
                          | COMMAND_USE_ITEM_PRLZ_HEAL \
-                         | COMMAND_USE_ITEM_FULL_HEAL)
+                         | COMMAND_USE_ITEM_FULL_HEAL \
+                         | COMMAND_USE_ITEM_X_ACCURACY)
 // option selects
-#define COMMAND_USE_GATEAU_OR_BITE 1 << 8
-#define COMMAND_USE_HYPER_OR_BITE 1 << 9
+#define COMMAND_USE_GATEAU_OR_BITE 1 << 16
+#define COMMAND_USE_HYPER_OR_BITE 1 << 17
+
+#define COMMAND_BRANCH_INC 1 << 19
+#define COMMAND_BRANCH_DEC 1 << 20
 
 #define TRIGGER_INTIMIDATE 1<<0
+#define TRIGGER_SAND_STREAM 1<<1
 
 #define MOVE_STATUS_MISSED              (1 << 0)
 #define MOVE_STATUS_SUPER_EFFECTIVE     (1 << 1)
@@ -38,7 +58,7 @@
 unsigned short advanceSeed(BattleContext *bc, std::string blurb = "none");
 bool useMove(Move move, BattleContext *bc);
 int calcDamage(BattleContext *bc, Move move, int crit = 1, int randomRoll = 0, bool hurtSelf = false);
-void dealDamage(Pokemon *p,  int damage, bool directSource = true);
+int dealDamage(Pokemon *p,  int damage, bool directSource = true);
 int getTypeMultiplier(BattleContext *bc, Move move, int damage, int *moveStatus);
 bool determineOrder(BattleContext *bc);
 bool doTurn(BattleContext *bc);
@@ -87,7 +107,7 @@ struct PokeClient {
     Pokemon team[6]; // the team list
     int useItems[4]; // items the AI can use
     int numUseItems;
-    int command; // which command we're using this turn
+    unsigned long command; // which command we're using this turn
     PokeClient(void);
     void pokeSwitch(int nextBattler);
     // triggers
@@ -96,16 +116,21 @@ struct PokeClient {
 };
 struct BattleContext {
 
-    Weather weather;
+
     RngSeed battleRng;
     PokeClient attacker;
     PokeClient defender;
     PokeClient tempHolder; // useful when we want to attack ourselves and need to hold the actual defender client somewhere 
+    int weather;
+    int weatherTurns;
     bool moveWasSuccessful; // only has to be used (get past premove), doesn't have to hit
     int cDmg; // variable flat damage
     int cPwr; // variable power 
+    int realDmg; // damage dealt by most recent move, used by moves that cause recoil or counter
     int turnNumber;
     int speedTieBreakers[4];
+    bool terminate;
+    int branch; // what branch we are on.  Whenever divergence occurs (using a potion that doesn't heal, trying to cure status that doesn't exist) the branch increases by 1
 
 };
 struct Fraction {

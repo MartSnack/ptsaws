@@ -76,6 +76,16 @@
         "xloctime": "cpp",
         "codecvt": "cpp",
         "filesystem": "cpp",
-        "string_view": "cpp"
-    }
+        "string_view": "cpp",
+        "array": "cpp"
+    },
+    "C_Cpp.files.exclude": {
+        "simulationResults/**": true,
+    },
+    "files.watcherExclude": {
+        "simulationResults/**": true,
+    },
+    "search.exclude": {
+        "simulationResults/**": true,
+    },
 }

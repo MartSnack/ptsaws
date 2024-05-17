@@ -93,7 +93,7 @@ static void AI_INCDEC(AiContext *ac, int val);
 bool AI_DEC1(AiContext *ac);
 bool AI_DEC10(AiContext *ac);
 bool AI_DEC12(AiContext *ac);
-Weather AI_CheckWeather(BattleContext *bc);
+int AI_CheckWeather(BattleContext *bc);
 AbilityId AI_CheckAbility(BattleContext *bc, AiContext *ac, bool target);
 bool AI_BasicPoison(BattleContext *bc, AiContext *ac);
 bool AI_BasicDamageEnd(BattleContext *bc, AiContext *ac);

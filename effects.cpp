@@ -4,6 +4,17 @@
 #include <cmath>
 #include "battle.h"
 #include "battle_effects.h"
+
+bool checkMoveEffect(Pokemon *p, int mc) {
+    if(p->bVal.substituteHp > 0) {
+        return false; // substitute blocks conditions
+    }
+    if(p->bVal.moveEffectsMask & mc) {
+        return false; // cannot apply an effect that's already active
+    }
+    // normally we would apply the condition here, but some moves have special protocol that isn't standardized, so just do it in the function
+    return true;
+}
 bool applyStatus(Pokemon *p, int sc, BattleContext *bc){
     if(p->bVal.substituteHp > 0) {
         return false; // substitute blocks conditions
@@ -58,7 +69,7 @@ bool modifyStat(bool affectSelf, Stat stat, int change, BattleContext *bc) {
             if(DEBUG) {
                 std::cout << "\tStat reduction prevented by Mist" << std::endl;
             }
-            return false; // prevented by mist
+            return true; // prevented by mist // still successful, apparently, though I would think this is not true ?  TODO
         }
         p = &bc->defender.team[bc->defender.battler];
         if(p->bVal.substituteHp > 0) {
@@ -67,9 +78,9 @@ bool modifyStat(bool affectSelf, Stat stat, int change, BattleContext *bc) {
     }
     int stageModifier = getStatStage(p, stat);
     if(stageModifier == 12) {
-        return false;
+        return true; // TODO might need more testing, but I'm pretty sure this doesn't count as true failure for the purpose of advancing rng twice, so we return true still
     } else if(stageModifier == 0) {
-        return false;
+        return true;
     } else {
         stageModifier = stageModifier + change;
         if(stageModifier > 12) {
@@ -153,6 +164,23 @@ bool applyConfusion(Pokemon *p, BattleContext *bc) {
     turnsRemaining = turnsRemaining << VOLATILE_CONDITION_CONFUSION_SHIFT;
     return applyVolatileStatus(p, turnsRemaining, bc);
 }
+bool applySleep(Pokemon *p, BattleContext *bc, bool bypass) {
+    // 0018 subscript
+    if(p->bVal.condition & MON_CONDITION_ANY) {
+        return false;
+    }
+    // bypass substitute if this is a bypassed sleep, eg from yawn
+    if(p->bVal.substituteHp > 0 && !bypass) {
+        return false; // prevented by substitute
+    }
+    // TODO logic for various interactions if required eg vital spirit, insomnia
+
+    int turnsRemaining = 2 + advanceSeed(bc, "determine how long to be asleep for") % 4;
+    if(DEBUG) {
+        std::cout << turnsRemaining << " turns asleep" << std::endl;
+    }
+    return applyStatus(p, turnsRemaining, bc);
+}
 bool applyTaunt(Pokemon *p, BattleContext *bc) {
     if(p->bVal.turnsTaunted > 0) {
         return false;
@@ -184,7 +212,7 @@ bool applyEndeavor(BattleContext *bc) {
 }
 bool applySubstitute(BattleContext *bc) {
     Pokemon attacker = bc->attacker.team[bc->attacker.battler];
-    if(attacker.bVal.substituteHp > 0) {
+    if(attacker.bVal.substituteHp == 0) {
         int subHealth = attacker.cHp / 4;
         if(attacker.bVal.bHp > subHealth) {
             dealDamage(&attacker, subHealth, false);
@@ -198,7 +226,33 @@ bool applyFlinch(Pokemon *p, BattleContext *bc) {
     bool appliedFlinch = applyVolatileStatus(p, VOLATILE_CONDITION_FLINCH, bc);
     return appliedFlinch;
 }
+bool applyRecoilQuarter(BattleContext *bc) {
+    int recoil = bc->realDmg / 4;
+    dealDamage(&bc->attacker.team[bc->attacker.battler], recoil, false); // apply indirect damage equal to a quarter of real damage dealt
+    return true; // this effect always succeeds if its triggered -- unless the pokemon has an ability that cancels it but we'll TODO that if it comes up
+}
+
+bool applyYawn(BattleContext *bc) {
+    bool appliedYawn = checkMoveEffect(&bc->defender.team[bc->defender.battler], MOVE_EFFECT_YAWN);
+    if(appliedYawn) {
+        bc->defender.team[bc->defender.battler].bVal.moveEffectsMask |= (1 << (MOVE_EFFECT_YAWN_SHIFT + 1));
+    }
+    return appliedYawn;
+}
+bool applyToxic(Pokemon *p, BattleContext *bc) {
+    bool appliedPoison = applyStatus(p, MON_CONDITION_TOXIC, bc);
+    if(p->bVal.item == ITEM_PECHA_BERRY && appliedPoison) {
+        if(DEBUG) {
+            std::cout << "\tPecha Berry Prevents Poison" << std::endl;
+        }
+        p->bVal.item = 0; // consume pecha berry
+        p->bVal.condition = 0; // reset condition
+        return true; // the poisoning effect still technically succeeds
+    }
+    return appliedPoison;
+}
 bool applyEffect(Move move, BattleContext *bc) {
+    // gigantic switch/case lol
     switch(move.effect) {
         case BATTLE_EFFECT_BURN_HIT:
         case BATTLE_EFFECT_STATUS_BURN:
@@ -230,6 +284,12 @@ bool applyEffect(Move move, BattleContext *bc) {
             return applyEndeavor(bc);
         case BATTLE_EFFECT_SET_SUBSTITUTE:
             return applySubstitute(bc);
+        case BATTLE_EFFECT_RECOIL_QUARTER:
+            return applyRecoilQuarter(bc);
+        case BATTLE_EFFECT_STATUS_SLEEP_NEXT_TURN: 
+            return applyYawn(bc);
+        case BATTLE_EFFECT_STATUS_BADLY_POISON:
+            return applyToxic(&bc->defender.team[bc->defender.battler], bc);
         default:
             return false;
     }

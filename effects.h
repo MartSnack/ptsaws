@@ -2,6 +2,7 @@
 #define EFFECTS_H_
 class Move;
 class BattleContext;
+class Pokemon;
 
 #define MON_CONDITION_NONE              0
 #define MON_CONDITION_SLEEP             ((1 << 0) | (1 << 1) | (1 << 2)) // counter for the number of sleep turns remaining
@@ -161,14 +162,7 @@ enum class Status {
     BURN,
     POISON,
 };
-struct StatusCondition {
-    Status status;
-    int turnsRemaining;
-};
-struct VolatileCondition {
-    Status status;
-    int turnsRemaining;
-};
+
 enum class Stat {
     ATTACK,
     DEFENSE,
@@ -178,23 +172,10 @@ enum class Stat {
     ACCURACY,
     EVASION,  
 };
-enum class MoveEffect {
-    NONE,
-    // status conditions
-    APPLY_POISON, // 33
-    APPLY_PARALYSIS, 
-    APPLY_BURN,
-    APPLY_BURN_ON_HIT,
-    // volatile conditions
-    APPLY_TAUNT, 
-    // stat modifiers
-    ACCURACY_DOWN, // 23
-    DEFENSE_DOWN_2, // 59
 
-};
 
 bool applyEffect(Move move, BattleContext *bc);
 bool applyMist(BattleContext *bc);
 bool modifyStat(bool affectSelf, Stat stat, int change, BattleContext *bc);
-
+bool applySleep(Pokemon *p, BattleContext *bc, bool bypass = false);
 #endif

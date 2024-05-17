@@ -85,8 +85,12 @@ void PokeClient::pokeSwitch(int nextBattler) {
     battler = nextBattler;
     Pokemon& p = team[battler];
     p.sendOut(); // refresh
+    log("Sent out " + p.info.name);
     if(p.cAbility == AbilityId::INTIMIDATE) {
         triggers |= TRIGGER_INTIMIDATE;
+    }
+    if(p.cAbility == AbilityId::SAND_STREAM) {
+        triggers |= TRIGGER_SAND_STREAM;
     }
 }
 int modifyStatValue(int base, int stage){
@@ -114,6 +118,8 @@ int getPriorityScore(PokeClient *pc) {
         priorityScore += pc->team[pc->battler].moveset[moveNum].priority;
     } else if(command1 & COMMAND_USE_ITEM) {
         priorityScore += 13; // higher than any move 
+    } else if(command1 & COMMAND_SWITCH) {
+        priorityScore += 16; // highest priority score for switching mons
     }
     return priorityScore;
 }
@@ -295,20 +301,28 @@ void heal(Pokemon *p, int amount) {
         p->bVal.bHp = p->cHp;
     }
 }
-void dealDamage(Pokemon *p,  int damage, bool directSource) {
+// returns the real damage done to the pokemon, taking into account
+// the fact that damage stops being dealt if a pokemon faints or after 
+// a substitute fades, etc.
+int dealDamage(Pokemon *p,  int damage, bool directSource) {
+    int realDamageDealt = 0;
     if(directSource && p->bVal.substituteHp > 0) {
         p->bVal.substituteHp = p->bVal.substituteHp - damage;
         if(p->bVal.substituteHp <= 0) {
+            realDamageDealt = p->bVal.substituteHp;
             p->bVal.substituteHp = 0;
-
+        } else {
+            realDamageDealt = damage;
         }
         p->bVal.substituteWasHit = true;
     } else {
+        realDamageDealt = damage;
         p->bVal.bHp = p->bVal.bHp - damage;
     }
 
 
     if(p->bVal.bHp < 0) {
+        realDamageDealt + p->bVal.bHp; // add the negative hp back to the damage dealt
         p->bVal.bHp = 0;
     }
     if((p->bVal.bHp <= (p->cHp / 2)) && p->bVal.bHp > 0) {
@@ -329,8 +343,10 @@ void dealDamage(Pokemon *p,  int damage, bool directSource) {
             }
         }
     }
+    return realDamageDealt;
 }
 bool preMove(Move move, BattleContext *bc) {
+    bc->realDmg = 0;
     bool statusDisrupted = checkStatusDisruption(bc, move); // paralysis, sleep, flinch
     if(statusDisrupted) {
         return false;
@@ -385,7 +401,7 @@ bool useMove(Move move, BattleContext *bc) {
                         std::cout << "\tDamage: " << dmg << std::endl;
                     }
 
-                    dealDamage(&bc->defender.team[bc->defender.battler], dmg);
+                    bc->realDmg = dealDamage(&bc->defender.team[bc->defender.battler], dmg);
                 }
 
 
@@ -465,12 +481,16 @@ bool useItem(BattleContext *bc, int item) {
             bc->attacker.team[bc->attacker.battler].bVal.condition = 0;
             bc->attacker.team[bc->attacker.battler].bVal.volConditions &= ~VOLATILE_CONDITION_CONFUSION;
         }
+    } else if(item & COMMAND_USE_ITEM_X_ACCURACY) {
+        log(bc->attacker.name + " uses X Accuracy");
+        modifyStat(true, Stat::ACCURACY, 1, bc);
+
     }
     return false;
 }
 void setupBattle(BattleContext *bc) {
     bc->turnNumber = 0;
-    bc->weather = Weather::None;
+    bc->weather = 0;
     bc->moveWasSuccessful = false;
 }
 // returns true if the move was disrupted by a status and the user
@@ -522,6 +542,20 @@ bool checkStatusDisruption(BattleContext *bc, Move move) {
             }
         }
     }
+    if(attackingPokemon->bVal.condition & MON_CONDITION_SLEEP) {
+        int sleepDec = 1; // can be 2 if the pokemon has ability Early Bird, but we don't run into that
+        if ((attackingPokemon->bVal.condition & MON_CONDITION_SLEEP) < sleepDec) {
+            attackingPokemon->bVal.condition &= ~MON_CONDITION_SLEEP;
+        } else {
+            attackingPokemon->bVal.condition -= sleepDec;
+        }
+        if(attackingPokemon->bVal.condition & MON_CONDITION_SLEEP) {
+            if(DEBUG) {
+                std::cout << "\t " << attackingPokemon->info.name << " is fast asleep!" << std::endl;
+            }
+            return true; // distrupted
+        }
+    }
 
     return false;
 }
@@ -545,32 +579,9 @@ void updateFlagsWhenHit(BattleContext *bc, Move move) {
 void resetContext(BattleContext *bc) {
     bc->moveWasSuccessful = false;
     bc->attacker.successfulMove = false;
+    bc->realDmg = 0;
 }
-int parseCommand(PokeClient *pc) {
-    int com = pc->command;
-    switch(com) {
-        case COMMAND_USE_GATEAU_OR_BITE:
-            if(pc->team[pc->battler].bVal.condition > 0 || pc->team[pc->battler].bVal.volConditions & VOLATILE_CONDITION_CONFUSION) {
-                com = COMMAND_USE_ITEM_FULL_HEAL;
-            } else {
-                com = COMMAND_MOVE_SLOT_2;
-            }
-            break;
-        case COMMAND_USE_HYPER_OR_BITE:
-            if(pc->team[pc->battler].bVal.bHp < pc->team[pc->battler].cHp) {
-                com = COMMAND_USE_ITEM_HYPER_POTION;
-            } else {
-                com = COMMAND_MOVE_SLOT_2;
-            }
-        default:
-            break;
-    }
-    return com;
-}
-void getCommand(BattleContext *bc) {
-    bc->attacker.command = parseCommand(&bc->attacker);
-    bc->defender.command = parseCommand(&bc->defender);
-}
+
 void executeCommand(BattleContext *bc) {
     resetContext(bc);
     int command = bc->attacker.command;
@@ -586,10 +597,23 @@ void executeCommand(BattleContext *bc) {
 
     } else if(command & COMMAND_USE_ITEM) {
         useItem(bc, command);
+    } else if(command & COMMAND_SWITCH) {
+        int switchNum = log2(command);
+        switchNum = switchNum - COMMAND_SWITCH_OFFSET; // from 4-9 to 0-5
+        bc->attacker.pokeSwitch(switchNum);
     }
 
 }
 bool isFightOver(BattleContext *bc) {
+    if(bc->terminate) {
+        // force termination
+        if(bc->attacker.aiControl){
+            bc->defender.isWinner = true;
+        } else {
+            bc->attacker.isWinner = true;
+        }
+        return true;
+    }
     bool attackerWon = true;
     bool defenderWon = true;
     int i;
@@ -615,12 +639,47 @@ bool isFightOver(BattleContext *bc) {
     }
     return false;
 }
-void triggerEndTurnConditions(PokeClient *p) {
+void triggerEndTurnConditions(PokeClient *p, BattleContext *bc) {
     // reset sub hit flag
     p->team[p->battler].bVal.substituteWasHit = false;
 
     // flinch wears off
     p->team[p->battler].bVal.volConditions &= ~VOLATILE_CONDITION_FLINCH;
+
+    // FIELD CONDITIONS //
+
+    if(p->team[p->battler].bVal.bHp && bc->weather & FIELD_CONDITION_SANDSTORM) {
+        bool progress = false;
+        if(bc->weather & FIELD_CONDITION_SANDSTORM_PERM) {
+            progress = true;
+        } else if(--bc->weatherTurns == 0) {
+            log("\tSandstorm subsides");
+            progress = false;
+        } else {
+            progress = true;
+        }
+        if(progress) {
+            log("\tSandstorm rages");
+            Type type1 = p->team[p->battler].info.primaryType;
+            Type type2 = p->team[p->battler].info.primaryType;
+            if(type1 != Type::Steel && type1 != Type::Rock && type1 != Type::Ground &&
+            type2 != Type::Steel && type2 != Type::Rock && type2 != Type::Ground){
+                // deal 1/16 damage
+                dealDamage(&p->team[p->battler], p->team[p->battler].cHp/16, false); // sandstorm deals indirect damage
+            }
+        }
+
+    }
+
+    // mist check occurs before condition checks
+    if(p->team[p->battler].bVal.bHp && p->sideConditions & SIDE_CONDITION_MIST) {
+        if(--p->mistTurns == 0) {
+            p->sideConditions &= ~SIDE_CONDITION_MIST;
+        }
+    }
+
+    
+    // REGULAR CONDITIONS //
 
     if((p->team[p->battler].bVal.condition & MON_CONDITION_POISON) && p->team[p->battler].bVal.bHp) {
         int psnDmg = p->team[p->battler].cHp/8;
@@ -636,6 +695,13 @@ void triggerEndTurnConditions(PokeClient *p) {
         }
         dealDamage(&p->team[p->battler], brnDmg, false);
 
+    } else if((p->team[p->battler].bVal.condition & MON_CONDITION_TOXIC) && p->team[p->battler].bVal.bHp) {
+        int psnDmg = p->team[p->battler].cHp/16;
+        if((p->team[p->battler].bVal.condition & MON_CONDITION_TOXIC_COUNTER) != MON_CONDITION_TOXIC_COUNTER) {
+            p->team[p->battler].bVal.condition += MON_CONDITION_TOXIC_COUNT_INC; // increment the toxic counter
+        }
+        psnDmg = psnDmg * ((p->team[p->battler].bVal.condition & MON_CONDITION_TOXIC_COUNTER) >> 8);
+        dealDamage(&p->team[p->battler], psnDmg, false); // indirectly deal damage
     }
     // taunt check
     if(p->team[p->battler].bVal.bHp && p->team[p->battler].bVal.turnsTaunted > 0) {
@@ -653,12 +719,14 @@ void triggerEndTurnConditions(PokeClient *p) {
             }
         }
     }
-    // mist check
-    if(p->team[p->battler].bVal.bHp && p->sideConditions & SIDE_CONDITION_MIST) {
-        if(--p->mistTurns == 0) {
-            p->sideConditions &= ~SIDE_CONDITION_MIST;
+    // yawn check 
+    if(p->team[p->battler].bVal.bHp && p->team[p->battler].bVal.moveEffectsMask & MOVE_EFFECT_YAWN) {
+        p->team[p->battler].bVal.moveEffectsMask -= (1 << MOVE_EFFECT_YAWN_SHIFT);
+        if((p->team[p->battler].bVal.moveEffectsMask & MOVE_EFFECT_YAWN) == 0) {
+            applySleep(&(p->team[p->battler]), bc, true); // put them to sleep
         }
     }
+
 
 
 
@@ -719,6 +787,11 @@ bool preTurnEffects(BattleContext *bc, bool doAttacker) {
         if(DEBUG) {
             std::cout << "Intimidate lowers " << logName(receiveClient->team[receiveClient->battler]) << " attack stat by 1" << std::endl;
         }
+    } else if(applyClient->triggers & TRIGGER_SAND_STREAM) {
+        bc->weather = FIELD_CONDITION_SANDSTORM_PERM;
+        bc->weatherTurns = 100;
+        log("Sand stream whips up a sandstorm");
+        applyClient->team[applyClient->battler].bVal.abilityKnownToAi = true; // announced
     }
     applyClient->triggers = 0; // reset all triggers.  TODO: might need to not reset all of them
     return true;
@@ -728,14 +801,16 @@ bool endOfTurn(BattleContext *bc) {
     if(isFightOver(bc)){
         return false;
     } else {
+        advanceSeed(bc); // end of turn rng advancement, reason unknown
+        advanceSeed(bc);
         bc->turnNumber++;
-        triggerEndTurnConditions(&bc->defender);
+        triggerEndTurnConditions(&bc->defender, bc);
         if(bc->defender.team[bc->defender.battler].bVal.bHp <= 0) {
             shouldContinue = switchIn(bc, false);
             bc->defender.isSwitching = true;
         }
         if(shouldContinue) {
-            triggerEndTurnConditions(&bc->attacker);
+            triggerEndTurnConditions(&bc->attacker, bc);
             if(bc->attacker.team[bc->attacker.battler].bVal.bHp <= 0) {
                 shouldContinue = switchIn(bc, true);
                 bc->attacker.isSwitching = true;
@@ -747,8 +822,7 @@ bool endOfTurn(BattleContext *bc) {
                 } else {
                     advanceSeed(bc);
                 }
-                advanceSeed(bc);
-                advanceSeed(bc);
+
                 advanceSeed(bc); // ai advances the seed 4 for some reason we don't know yet
                 processAI(bc);
                 return true;
@@ -766,7 +840,11 @@ bool endOfTurn(BattleContext *bc) {
 }
 // returns true if the battle should continue
 bool doTurn(BattleContext *bc) {
-    getCommand(bc); // figures out what command to use, if we're option-selecting
+    if(bc->attacker.command == COMMAND_TERMINATE || bc->defender.command == COMMAND_TERMINATE) {
+        log("--Terminating--");
+        bc->terminate = true;
+        return endOfTurn(bc);
+    }
     log("\t\t\t\t\t\t\t[ Turn " + std::to_string(bc->turnNumber) + " ]");
     if(!determineOrder(bc)) {
         // need to switch current order

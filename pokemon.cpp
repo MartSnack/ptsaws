@@ -68,7 +68,11 @@ std::map<Mons, PokeInfo> pokemap = {
     {PACHIRISU, PokeInfo("Pachirisu", 60,45,70,45,90,95, Type::Electric, Type::None, RUN_AWAY)}, // pickup as well, but who cares we can't catch one anyway
     {STARLY, PokeInfo("Starly", 40, 55, 30, 30, 30, 60, Type::Normal, Type::Flying, KEEN_EYE)},
     {MISMAGIUS, PokeInfo("Mismagius", 60, 60, 60, 105, 105, 105, Type::Ghost, Type::None, LEVITATE)},
-    {EEVEE, PokeInfo("Eevee", 55, 55, 50, 45, 65, 55, Type::Normal, Type::None, RUN_AWAY, ADAPTABILITY)}
+    {EEVEE, PokeInfo("Eevee", 55, 55, 50, 45, 65, 55, Type::Normal, Type::None, RUN_AWAY, ADAPTABILITY)},
+    {HIPPOPOTAS, PokeInfo("Hippopotas", 68, 72, 78, 38, 42, 32, Type::Ground, Type::None, SAND_STREAM)},
+    {TOGETIC, PokeInfo("Togetic", 55, 40, 85, 80, 105, 40, Type::Normal, Type::Flying, HUSTLE)},
+    {VAPOREON, PokeInfo("Vaporeon", 130, 65, 60, 110, 95, 65, Type::Water, Type::None, WATER_ABSORB)}
+
 };
 
 
@@ -185,7 +189,7 @@ PokeClient getPlayerFantinaClient() {
     Move moveset1[4] = {Tackle, FlameWheel, Taunt, Tackle};	
     Move moveset2[4] = {Tackle, Bite, Substitute, Tackle};
     Pokemon monferno = Pokemon(35, gentle, 0, MONFERNO, moveset1);
-    Pokemon eevee = Pokemon(32, naive, 0, EEVEE, moveset2);
+    Pokemon eevee = Pokemon(32, timid, 0, EEVEE, moveset2);
     eevee.setEvs(252, 0, 0, 0, 0, 252);
     eevee.calcStats();
     monferno.setEvs(36,8,16,28,8,64);
@@ -238,6 +242,8 @@ PokeClient getTripleStarlyClient() {
     p2.name = "AI";
     return p2;
 }
+
+
 PokeClient getFantinaClient() {
     PokeClient p2;
     Move moveset[4] = {ShadowBall, Psybeam, MagicalLeaf, ConfuseRay};
@@ -251,6 +257,38 @@ PokeClient getFantinaClient() {
     p2.numUseItems = 1;
     p2.name = "AI";
     return p2;
+}
+PokeClient getHippopotasClient() {
+    PokeClient p2;
+    Move moveset[4] = {SandAttack, Bite, Yawn, TakeDown};
+    Pokemon hippo = Pokemon(24, lonely, 31, HIPPOPOTAS, moveset);
+    hippo.hpIv = 0;
+    hippo.spdIv = 0;
+    hippo.calcStats(); // recalc stats
+    p2.aiControl = true;
+    p2.aiLevel = 0;
+    p2.battler = 0;
+    p2.team[0] = hippo;
+    p2.name = "Wild Hippo";
+    return p2;
+}
+PokeClient getPlayerHippoClient() {
+    PokeClient p1;
+    Move moveset1[4] = {Charm, Charm, Charm, Charm};	
+    Move moveset2[4] = {Substitute, Toxic, Substitute, Substitute};
+    Pokemon vapor = Pokemon(36, lonely, 0, VAPOREON, moveset2);
+    Pokemon togetic = Pokemon(24, lonely, 0, TOGETIC, moveset1);
+    togetic.setEvs(6,6,15,7,2,17);
+    togetic.calcStats(); // recalc stats after setting evs
+    vapor.setEvs(252, 0, 0, 0, 0, 252);
+    vapor.calcStats();
+    // monferno.bVal.condition |= MON_CONDITION_PARALYSIS;
+    p1.battler = 0;
+    p1.aiControl = false;
+    p1.team[0] = togetic;
+    p1.team[1] = vapor;
+    p1.name = "Player";
+    return p1;
 }
 BattleContext setupJupiterFight(unsigned long startingSeed) {
     Move moveset1[4] = {Tackle, FlameWheel, Taunt, Tackle};	
@@ -278,7 +316,9 @@ BattleContext setupJupiterFight(unsigned long startingSeed) {
     RngSeed rs = {startingSeed,0};
     p1.pokeSwitch(p1.battler);
     p2.pokeSwitch(p2.battler); 
-    BattleContext bc = {Weather::None, rs, p1, p2};
+    BattleContext bc = {rs, p1, p2};
+    bc.weather = 0;
+    bc.weatherTurns = 0;
     bc.moveWasSuccessful = false;
 
     // p1.team[p1.battler].sendOut();
@@ -287,18 +327,20 @@ BattleContext setupJupiterFight(unsigned long startingSeed) {
     return bc;
 }
 BattleContext setupVarFight(unsigned long startingSeed) {
-    PokeClient p1 = getPlayerFantinaClient();
-    PokeClient p2 = getFantinaClient();
+    PokeClient p1 = getPlayerHippoClient();
+    PokeClient p2 = getHippopotasClient();
     p1.pokeSwitch(p1.battler);
     p2.pokeSwitch(p2.battler);
-    p1.team[p1.battler].bVal.evaStg = 12;
-    p1.team[p1.battler].bVal.spDefStg = 7;
-    p1.team[p1.battler].bVal.substituteHp = 24;
-    p1.team[p1.battler].bVal.item = ITEM_BOOST_DARK;
+    // p1.team[p1.battler].bVal.evaStg = 12;
+    // p1.team[p1.battler].bVal.spDefStg = 7;
+    // p1.team[p1.battler].bVal.substituteHp = 24;
+    // p1.team[p1.battler].bVal.item = ITEM_BOOST_DARK;
     // p1.team[p1.battler].sendOut();
     // p2.team[p2.battler].sendOut();
     RngSeed rs = {startingSeed, 0};
-    BattleContext bc = {Weather::None, rs, p1, p2};
+    BattleContext bc = {rs, p1, p2};
+    bc.weather = 0;
+    bc.weatherTurns = 0;
     bc.moveWasSuccessful = false;
     bc.turnNumber = 0;
 

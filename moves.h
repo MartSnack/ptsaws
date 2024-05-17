@@ -59,6 +59,10 @@ enum class MoveId {
     MAGICAL_LEAF,
     BITE,
     SUBSTITUTE,
+    SAND_ATTACK,
+    YAWN,
+    TAKE_DOWN,
+    TOXIC,
 };
 struct Move {
         MoveId id;
@@ -99,4 +103,10 @@ extern Move ShadowBall;
 extern Move MagicalLeaf;
 extern Move Substitute;
 extern Move Bite;
+extern Move SandAttack;
+extern Move Yawn;
+extern Move TakeDown;
+extern Move Toxic;
+
+
 #endif /* MOVES_H_ */

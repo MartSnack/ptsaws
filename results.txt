@@ -237,3 +237,58 @@ Player won. Lowest hp -> 44 // Seed: 145101
 Player won. Lowest hp -> 53 // Seed: 151335
 
 595058 -> 38 current lowest
+
+Old Chateau longest cycles to find a lvl 17 gastly
+highest cycles: 2719
+starting seed: 3513384105
+lowest cycles: 1
+starting seed: 362
+highest2 cycles: 0  starting seed: 0
+lowest2 cycles: 0  starting seed: 0
+685685ms
+685686ms
+
+Hearthome gym
+uses mtrng, 1 val for clue, variable random vals for location of hint
+highest cycles: 303
+starting seed: 1374138510
+2647769ms
+2.64777e+06ms
+
+takes 303 attempts at most, this means full attempt, not just opening one door.  
+
+
+______
+highest cycles: 58
+starting seed: 1058389899
+2158243ms
+2.15824e+06ms
+58 attempts at most to get through the first door
+
+
+______
+
+Roselia repel trick grass 
+
+highest cycles: 6307
+starting seed: 1058110769
+lowest cycles: 1
+starting seed: 2853
+highest2 cycles: 0  starting seed: 0
+lowest2 cycles: 0  starting seed: 0
+1505257ms
+1.50526e+06ms
+
+___________
+
+Hippopotas repel trick cave
+
+highest cycles: 66045
+// EDIT: 66630 actually, after correcting max step formula for encounters
+starting seed: 3048147860
+lowest cycles: 1
+starting seed: 32931
+highest2 cycles: 0  starting seed: 0
+lowest2 cycles: 0  starting seed: 0
+19761323ms
+1.97613e+07ms

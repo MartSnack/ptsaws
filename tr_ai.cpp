@@ -462,14 +462,18 @@ void processAI(BattleContext *bc) {
     } else if(choice == 2) {
         bc->attacker.command = ac.self.command;
     } else {
-        ailog("dmgloss rolls >> Rng advances 4");
-        for(i = 0; i < 4; i++) {
+        if(ac.self.aiLevel > 0) {
+            ailog("dmgloss rolls >> Rng advances 4");
+            for(i = 0; i < 4; i++) {
 
-            ac.damageLoss[i] = advanceSeed(bc)%16;
-            ailog(ac.damageLoss[i]);
+                ac.damageLoss[i] = advanceSeed(bc)%16;
+                ailog(ac.damageLoss[i]);
+            }
         }
         ac.currentIndex = 0;
         ac.currentScore = 0;
+        // the order in which AI does its moves is all four moves for basic AI, all four for Strong, all four for expert, ETC
+        // the commented out code was made thinking it was done one move at a time for all the AI types
         for(i = 0;i<4;i++) {
             if(ac.self.team[ac.self.battler].moveset[i].id != MoveId::NO_MOVE) {
                 ac.currentIndex = i;
@@ -579,7 +583,7 @@ bool AI_DEC12(AiContext *ac) {
     AI_INCDEC(ac, -12);
     return true;
 }
-Weather AI_CheckWeather(BattleContext *bc) {
+int AI_CheckWeather(BattleContext *bc) {
     return bc->weather;
 }
 
@@ -781,7 +785,7 @@ bool AI_BasicPoison(BattleContext *bc, AiContext *ac) {
         return AI_DEC10(ac);
     }
     if(abi == LEAF_GUARD) {
-        if(AI_CheckWeather(bc) == Weather::Sunny) {
+        if(AI_CheckWeather(bc) & FIELD_CONDITION_SUNNY) {
             return AI_DEC10(ac);
         }
     }
@@ -791,7 +795,7 @@ bool AI_BasicPoison(BattleContext *bc, AiContext *ac) {
 bool AI_BasicPoison_NoLeafGuard(BattleContext *bc, AiContext *ac) {
     AbilityId abi = AI_CheckAbility(bc, ac);
     if(abi == HYDRATION) {
-        if(AI_CheckWeather(bc) == Weather::Rain) {
+        if(AI_CheckWeather(bc) & FIELD_CONDITION_RAINING) {
             return AI_DEC10(ac);
         }
     }
