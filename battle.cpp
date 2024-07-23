@@ -72,6 +72,7 @@ PokeClient::PokeClient(void): previouslySelectedMove() {
     sideConditions = 0;
     safeGuardTurns = 0;
     mistTurns = 0;
+    toxicSpikeLayers = 0;
     isWinner = false;
     triggers = 0;
     aiJumpNum = 2;
@@ -91,6 +92,9 @@ void PokeClient::pokeSwitch(int nextBattler) {
     }
     if(p.cAbility == AbilityId::SAND_STREAM) {
         triggers |= TRIGGER_SAND_STREAM;
+    }
+    if(sideConditions & SIDE_CONDITION_TOXIC_SPIKES) {
+        triggers |= TRIGGER_TOXIC_SPIKES;
     }
 }
 int modifyStatValue(int base, int stage){
@@ -114,7 +118,7 @@ int getPriorityScore(PokeClient *pc) {
     if(command1 & COMMAND_MOVE) {
         // moves have lowest priority
         priorityScore += 6;
-        int moveNum = log2(command1);
+        int moveNum = log2(command1 & COMMAND_MOVE);
         priorityScore += pc->team[pc->battler].moveset[moveNum].priority;
     } else if(command1 & COMMAND_USE_ITEM) {
         priorityScore += 13; // higher than any move 
@@ -238,7 +242,7 @@ int calcDamage(BattleContext *bc, Move move, int crit, int randomRoll, bool hurt
         }
     }
     int movePower = move.power;
-    if(movePower == 1) {
+    if(movePower == 1 || movePower == 3) {
         bc->cDmg = 0;
         bc->cPwr = 0;
         // move has variable (or flat) power
@@ -250,7 +254,7 @@ int calcDamage(BattleContext *bc, Move move, int crit, int randomRoll, bool hurt
                 return bc->cDmg;
             } else {
                 // if cDmg wasn't set, power must be. Set move power to the variable power result 
-                movePower = bc->cPwr; 
+                movePower = bc->cPwr;
             }
         } else {
             return 0; // move failed, return 0 for damage 
@@ -260,8 +264,17 @@ int calcDamage(BattleContext *bc, Move move, int crit, int randomRoll, bool hurt
         // black sunglasses, dread plate
         movePower = movePower * 120 / 100; // 20% damage boosto
     }
+    if(attacker.team[attacker.battler].bVal.item == ITEM_BOOST_WATER && move.moveType == Type::Water) {
+        // wave incense, splash plate, mystic water
+        movePower = movePower * 120 / 100; // 20% damage boosto
+    }
     if(move.moveType == Type::Fire && attacker.team[attacker.battler].cAbility == AbilityId::BLAZE && attacker.team[attacker.battler].bVal.bHp <= attacker.team[attacker.battler].cHp/3){
         movePower = movePower * 150 / 100;
+    }
+
+    if(attacker.team[attacker.battler].cAbility == AbilityId::RIVALRY) {
+        // TODO: Should check the gender here. For our purposes, it doesn't matter, Rivalry will always be positive bonus for our opponents and we don't have access to it
+        movePower = movePower * 125 / 100;
     }
     int powerBase = (lvlBase * movePower * (cAtkStat));
     int defDivide = powerBase / cDefStat;
@@ -322,7 +335,7 @@ int dealDamage(Pokemon *p,  int damage, bool directSource) {
 
 
     if(p->bVal.bHp < 0) {
-        realDamageDealt + p->bVal.bHp; // add the negative hp back to the damage dealt
+        realDamageDealt += p->bVal.bHp; // add the negative hp back to the damage dealt
         p->bVal.bHp = 0;
     }
     if((p->bVal.bHp <= (p->cHp / 2)) && p->bVal.bHp > 0) {
@@ -341,6 +354,13 @@ int dealDamage(Pokemon *p,  int damage, bool directSource) {
             if(DEBUG) {
                 std::cout << "\t\tSitrus berry activates: " << p->info.name << " heals " <<  oldHp << "->" << p->bVal.bHp << std::endl;
             }
+        } else if(p->bVal.item == ITEM_NATURE_BERRY) {
+            int oldHp = p->bVal.bHp;
+            heal(p, p->cHp/8);
+            p->bVal.item = ITEM_NONE; // consumed
+            if(DEBUG){
+                std::cout << "\t\tNature berry activates: " << p->info.name << " heals " <<  oldHp << "->" << p->bVal.bHp << std::endl;
+            }
         }
     }
     return realDamageDealt;
@@ -358,11 +378,30 @@ bool preMove(Move move, BattleContext *bc) {
     if(bc->defender.team[bc->defender.battler].bVal.bHp == 0 && move.range == RANGE_TARGET) {
         return false; // no valid target
     }
+
     bc->moveWasSuccessful = true;
     return true;
 }
 bool postMove(Move move, BattleContext *bc){
     return true;
+}
+
+bool accuracyOverride(Move move, BattleContext *bc, int *movestatus) {
+    if(bc->defender.team[bc->defender.battler].bVal.isProtected && (move.flags & FLAG_CAN_PROTECT)) {
+        *movestatus |= MOVE_STATUS_MISSED;
+        log("\tProtected");
+        return true;
+    }
+    if(move.effect == BATTLE_EFFECT_HIT_FIRST_IF_TARGET_ATTACKING) {
+        if(bc->defender.command & COMMAND_MOVE) {
+            int moveCommand = log2(bc->defender.command & COMMAND_MOVE);
+            if(bc->defender.team[bc->defender.battler].moveset[moveCommand].power == 0){
+                *movestatus |= MOVE_STATUS_MISSED;
+                return true;
+            }
+        }
+    }
+    return false;
 }
 // return true if move was successful, false if not
 bool useMove(Move move, BattleContext *bc) {
@@ -386,57 +425,78 @@ bool useMove(Move move, BattleContext *bc) {
             dmgRoll = advanceSeed(bc) % 16;
         }
         bool accRoll = rollAccuracy(move, bc);
-        if(accRoll) {
+        int moveStatus = 0;
+        bool overridden = accuracyOverride(move, bc, &moveStatus);
+        if(accRoll && !overridden) {
             // move hits
-            if(move.power == 0) {
-                // non-attacking move handler
-            } else {
-                dmg = calcDamage(bc, move, crit, dmgRoll);
-                if(dmg > 0){
-                    success = true; // dmg move successfully executed
-                    if(DEBUG) {
-                        if(crit > 1) {
-                            std::cout << "\tCrit" << std::endl;
+            if(move.range == RANGE_TARGET && move.power > 0 || move.id == MoveId::THUNDER_WAVE) {
+                // for whatever reason thunder wave specifically is affected by type matchups
+                // type matchups are calculated after accuracy is rolled... apparently?
+
+                int dmg = getTypeMultiplier(bc, move, 40, &moveStatus); // mock a multiplier to see if we're immune
+                if(moveStatus & MOVE_STATUS_IMMUNE) {
+                    success = false;
+                }
+            }
+            if(!(moveStatus & MOVE_STATUS_IMMUNE)) {
+                if(move.power == 0) {
+                    // non-attacking move handler
+                } else {
+                    dmg = calcDamage(bc, move, crit, dmgRoll);
+                    if(dmg > 0){
+                        success = true; // dmg move successfully executed
+                        if(DEBUG) {
+                            if(crit > 1) {
+                                std::cout << "\tCrit" << std::endl;
+                            }
+                            std::cout << "\tDamage: " << dmg << std::endl;
                         }
-                        std::cout << "\tDamage: " << dmg << std::endl;
+
+                        bc->realDmg = dealDamage(&bc->defender.team[bc->defender.battler], dmg);
+                        if(move.flags & FLAG_MAKES_CONTACT) {
+                            if(bc->defender.team[bc->defender.battler].bVal.item == ITEM_STICKY_BARB) {
+                                if(bc->attacker.team[bc->attacker.battler].bVal.item == 0) {
+                                    bc->attacker.team[bc->attacker.battler].bVal.item = ITEM_STICKY_BARB;
+                                    bc->defender.team[bc->defender.battler].bVal.item = 0; // transfer sticky barb
+                                }
+                            }
+                        }
+                    }
+                }
+                bool shouldApplyEffect = false;
+                if(move.secondary) {
+                    //when checking if opponenet is alive, we may need
+                    // to verify if the moves secondary targets us or them
+                    // e.g. ancientpower buff vs flamewheel burn
+                    if(bc->defender.team[bc->defender.battler].bVal.bHp > 0) {
+                        log("\tChecking secondary effect chance");
+                        shouldApplyEffect = (advanceSeed(bc) % 100) < move.secondaryAccuracy;
+                        // in certain scenarios, hitting a substitute prevents secondary effect from triggering
+                        // exact details are a bit fuzzy, but psybeam (10% confusion chance) does not trigger
+                        // even if it knocks out the substitute with its damage.  But flare blitz does apply burn (supposedly, haven't tested yet).
+                        // TODO: test this further, don't forget about this interaction when using substitute
+                        if(bc->defender.team[bc->defender.battler].bVal.substituteWasHit) {
+                            shouldApplyEffect = false; // do not apply effect instead.  We still roll the random value though.  
+                        }                
                     }
 
-                    bc->realDmg = dealDamage(&bc->defender.team[bc->defender.battler], dmg);
+                } else {
+                    if (move.effect != BATTLE_EFFECT_HIT){
+                        shouldApplyEffect = true; // if the effect is the prime component of the move, we do it so long as we hit
+                    }
                 }
-
-
-            }
-            bool shouldApplyEffect = false;
-            if(move.secondary) {
-                //when checking if opponenet is alive, we may need
-                // to verify if the moves secondary targets us or them
-                // e.g. ancientpower buff vs flamewheel burn
-                if(bc->defender.team[bc->defender.battler].bVal.bHp > 0) {
-                    log("\tChecking secondary effect chance");
-                    shouldApplyEffect = (advanceSeed(bc) % 100) < move.secondaryAccuracy;
-                    // in certain scenarios, hitting a substitute prevents secondary effect from triggering
-                    // exact details are a bit fuzzy, but psybeam (10% confusion chance) does not trigger
-                    // even if it knocks out the substitute with its damage.  But flare blitz does apply burn (supposedly, haven't tested yet).
-                    // TODO: test this further, don't forget about this interaction when using substitute
-                    if(bc->defender.team[bc->defender.battler].bVal.substituteWasHit) {
-                        shouldApplyEffect = false; // do not apply effect instead.  We still roll the random value though.  
-                    }                }
-
-            } else {
-                if (move.effect != BATTLE_EFFECT_HIT){
-                    shouldApplyEffect = true; // if the effect is the prime component of the move, we do it so long as we hit
+                if(shouldApplyEffect) {
+                    if(DEBUG) {
+                        std::cout << "\tTry Applying Effect" << std::endl;
+                    }
+                    // regardless of whether the effect was a secondary or a primary, we apply it
+                    bool didApply = applyEffect(move, bc);
+                    if(!move.secondary && didApply){
+                        success = true; // status move successfully executed
+                    }
                 }
             }
-            if(shouldApplyEffect) {
-                if(DEBUG) {
-                    std::cout << "\tTry Applying Effect" << std::endl;
-                }
-                // regardless of whether the effect was a secondary or a primary, we apply it
-                bool didApply = applyEffect(move, bc);
-                if(!move.secondary && didApply){
-                    success = true; // status move successfully executed
-                }
-            }
+            
 
         } else {
             log("\tMove Missed");
@@ -481,11 +541,32 @@ bool useItem(BattleContext *bc, int item) {
             bc->attacker.team[bc->attacker.battler].bVal.condition = 0;
             bc->attacker.team[bc->attacker.battler].bVal.volConditions &= ~VOLATILE_CONDITION_CONFUSION;
         }
+    } else if(item & COMMAND_USE_ITEM_FULL_RESTORE) {
+        log(bc->attacker.name + " uses Full Restore");
+        bool didHeal = false;
+        bool didStatus = false;
+        if(bc->attacker.team[bc->attacker.battler].bVal.bHp < bc->attacker.team[bc->attacker.battler].cHp) {
+            heal(&bc->attacker.team[bc->attacker.battler], bc->attacker.team[bc->attacker.battler].cHp);
+            didHeal = true;
+        }
+        if(bc->attacker.team[bc->attacker.battler].bVal.condition > 0 || bc->attacker.team[bc->attacker.battler].bVal.volConditions & VOLATILE_CONDITION_CONFUSION) {
+            bc->attacker.team[bc->attacker.battler].bVal.condition = 0;
+            bc->attacker.team[bc->attacker.battler].bVal.volConditions &= ~VOLATILE_CONDITION_CONFUSION;
+            didStatus = true;
+        }
+        return didHeal || didStatus;
     } else if(item & COMMAND_USE_ITEM_X_ACCURACY) {
         log(bc->attacker.name + " uses X Accuracy");
         modifyStat(true, Stat::ACCURACY, 1, bc);
-
-    }
+    } else if(item & COMMAND_USE_ITEM_X_SPEED) {
+        log(bc->attacker.name + " uses X Speed");
+        modifyStat(true, Stat::SPEED, 1, bc);
+    } else if(item & COMMAND_USE_ITEM_ANTIDOTE) {
+        log(bc->attacker.name + " uses Antidote");
+        if(bc->attacker.team[bc->attacker.battler].bVal.condition & MON_CONDITION_ANY_POISON) {
+            bc->attacker.team[bc->attacker.battler].bVal.condition = MON_CONDITION_NONE; // clear poison
+        }
+    };
     return false;
 }
 void setupBattle(BattleContext *bc) {
@@ -553,7 +634,15 @@ bool checkStatusDisruption(BattleContext *bc, Move move) {
             if(DEBUG) {
                 std::cout << "\t " << attackingPokemon->info.name << " is fast asleep!" << std::endl;
             }
-            return true; // distrupted
+            return true; // disrupted
+        }
+    }
+    if(attackingPokemon->bVal.condition & MON_CONDITION_FREEZE) {
+        if(advanceSeed(bc) %5 !=0) {
+            return true; // disrupted
+        } else {
+            attackingPokemon->bVal.condition &= ~MON_CONDITION_FREEZE; // thaw out
+
         }
     }
 
@@ -587,20 +676,22 @@ void executeCommand(BattleContext *bc) {
     int command = bc->attacker.command;
     if(command & COMMAND_MOVE) {
 
-        int moveNum = log2(command);
+        int moveNum = log2(command & COMMAND_MOVE);
         bool success = useMove(bc->attacker.team[bc->attacker.battler].moveset[moveNum], bc);
         if(success) {
             log("\tMove Succeeded > RNG advances 2");
             advanceSeed(bc);
             advanceSeed(bc);
         }
+        bc->attacker.command &= ~COMMAND_MOVE; // remove command move 
 
     } else if(command & COMMAND_USE_ITEM) {
-        useItem(bc, command);
+        useItem(bc, command & COMMAND_USE_ITEM);
     } else if(command & COMMAND_SWITCH) {
-        int switchNum = log2(command);
+        int switchNum = log2(command & COMMAND_SWITCH);
         switchNum = switchNum - COMMAND_SWITCH_OFFSET; // from 4-9 to 0-5
         bc->attacker.pokeSwitch(switchNum);
+        bc->attacker.command &= ~COMMAND_SWITCH; // remove command switch
     }
 
 }
@@ -642,7 +733,13 @@ bool isFightOver(BattleContext *bc) {
 void triggerEndTurnConditions(PokeClient *p, BattleContext *bc) {
     // reset sub hit flag
     p->team[p->battler].bVal.substituteWasHit = false;
-
+    // reset protection
+    if(p->team[p->battler].bVal.isProtected) {
+        p->team[p->battler].bVal.isProtected = false;
+    } else {
+        p->team[p->battler].bVal.turnsProtected = 0;
+    }
+    
     // flinch wears off
     p->team[p->battler].bVal.volConditions &= ~VOLATILE_CONDITION_FLINCH;
 
@@ -678,7 +775,12 @@ void triggerEndTurnConditions(PokeClient *p, BattleContext *bc) {
         }
     }
 
-    
+    // ITEMS //
+
+    if(p->team[p->battler].bVal.item == ITEM_STICKY_BARB && p->team[p->battler].bVal.bHp) {
+        dealDamage(&p->team[p->battler], p->team[p->battler].cHp/8, false); // sticky barb deals indirect damage
+    }
+
     // REGULAR CONDITIONS //
 
     if((p->team[p->battler].bVal.condition & MON_CONDITION_POISON) && p->team[p->battler].bVal.bHp) {
@@ -731,18 +833,46 @@ void triggerEndTurnConditions(PokeClient *p, BattleContext *bc) {
 
 
 }
-
+int getSwitchNum(unsigned long command) {
+    int switchNum = log2(command & COMMAND_SWITCH);
+    switchNum = switchNum - COMMAND_SWITCH_OFFSET; // from 4-9 to 0-5
+    return switchNum;
+}
 // switch in a new mon if we need it
 // returns true if we swapped
 // return false if we didn't.
 bool switchIn(BattleContext *bc, bool attacker) {
     PokeClient *pc;
+    PokeClient *opc;
     if(attacker) {
         pc = &bc->attacker;
+        opc = &bc->defender;
     } else {
         pc = &bc->defender;
+        opc = &bc->attacker;
     }
     int numValidMons = 0;
+    if(!pc->aiControl) {
+        // player control
+        if(pc->command & COMMAND_SWITCH) { // we have a switch command that has persisted through the command selection
+            int switchNum = getSwitchNum(pc->command);
+            if(pc->team[switchNum].bVal.bHp > 0) {
+                log(pc->name + " sends out " + pc->team[switchNum].info.name);
+                pc->pokeSwitch(switchNum);
+                return true;
+            }
+        }
+    } else {
+        // the opponent has fainted
+        if(opc->command & COMMAND_SWITCH) {
+            int switchNum = getSwitchNum(opc->command);
+            if(opc->team[switchNum].bVal.bHp > 0) {
+                log(opc->name + " sends out " + opc->team[switchNum].info.name);
+                opc->pokeSwitch(switchNum);
+                // do not return here, because the fight could be over
+            }
+        }
+    }
     if(pc->aiControl) {
         for(int i = 0; i<6; i++) {
             if(pc->team[i].bVal.bHp > 0) {
@@ -787,37 +917,89 @@ bool preTurnEffects(BattleContext *bc, bool doAttacker) {
         if(DEBUG) {
             std::cout << "Intimidate lowers " << logName(receiveClient->team[receiveClient->battler]) << " attack stat by 1" << std::endl;
         }
-    } else if(applyClient->triggers & TRIGGER_SAND_STREAM) {
+    }
+    if(applyClient->triggers & TRIGGER_SAND_STREAM) {
         bc->weather = FIELD_CONDITION_SANDSTORM_PERM;
         bc->weatherTurns = 100;
         log("Sand stream whips up a sandstorm");
         applyClient->team[applyClient->battler].bVal.abilityKnownToAi = true; // announced
     }
+    if(applyClient->triggers & TRIGGER_TOXIC_SPIKES) {
+        if(applyClient->team[applyClient->battler].info.primaryType == Type::Poison || applyClient->team[applyClient->battler].info.secondaryType == Type::Poison) {
+            if(!(applyClient->team[applyClient->battler].info.primaryType == Type::Flying || applyClient->team[applyClient->battler].info.secondaryType == Type::Flying)) {
+                applyClient->sideConditions &= ~SIDE_CONDITION_TOXIC_SPIKES;
+                applyClient->toxicSpikeLayers = 0; //  remove all toxic spikes
+            }
+        }
+        if(
+            applyClient->team[applyClient->battler].info.primaryType == Type::Steel || 
+            applyClient->team[applyClient->battler].info.secondaryType == Type::Steel ||
+            applyClient->team[applyClient->battler].info.primaryType == Type::Flying ||
+            applyClient->team[applyClient->battler].info.secondaryType == Type::Flying) {
+                // do nothing
+        } else {
+            if(applyClient->toxicSpikeLayers == 1) {
+                applyPoison(&applyClient->team[applyClient->battler], bc);
+            } else {
+                applyToxic(&applyClient->team[applyClient->battler], bc);
+            }
+        }
+    }
     applyClient->triggers = 0; // reset all triggers.  TODO: might need to not reset all of them
     return true;
 }
+
 bool endOfTurn(BattleContext *bc) {
     bool shouldContinue = true;
     if(isFightOver(bc)){
         return false;
     } else {
-        advanceSeed(bc); // end of turn rng advancement, reason unknown
-        advanceSeed(bc);
+        // advanceSeed(bc); // end of turn rng advancement, reason unknown
+
         bc->turnNumber++;
+        // unknown why this seed advancement occurs
+        if(bc->defender.team[bc->defender.battler].bVal.bHp <= 0) {
+            // im tired
+            log("Skipping seed advancement due to defender switching");
+        } else {
+            advanceSeed(bc);
+        }
         triggerEndTurnConditions(&bc->defender, bc);
         if(bc->defender.team[bc->defender.battler].bVal.bHp <= 0) {
             shouldContinue = switchIn(bc, false);
             bc->defender.isSwitching = true;
         }
+
         if(shouldContinue) {
+            if(bc->attacker.team[bc->attacker.battler].bVal.bHp <= 0 && !bc->attacker.aiControl) {
+                log("Skipping seed advancement due to attacker switching and being under AI control");
+            } else {
+                advanceSeed(bc);
+            }
             triggerEndTurnConditions(&bc->attacker, bc);
             if(bc->attacker.team[bc->attacker.battler].bVal.bHp <= 0) {
                 shouldContinue = switchIn(bc, true);
                 bc->attacker.isSwitching = true;
             }
+
+            // if((bc->attacker.isSwitching && bc->attacker.aiControl) || bc->defender.isSwitching && bc->defender.aiControl) {
+            //     // the AI is doing an end-of-turn switch (Post-KO switch). We should allow a free switch in for the player .
+            //     unsigned long command = bc->switchCommands[bc->switchCommandIndex];
+            //     bc->switchCommandIndex++;
+            //     log("Doing post-ko player switch");
+            //     if(command > 0) {
+            //         int switchNum = log2(command);
+            //         switchNum = switchNum - COMMAND_SWITCH_OFFSET; // from 4-9 to 0-5
+            //         if(bc->attacker.aiControl) {
+            //             bc->defender.pokeSwitch(switchNum);
+            //         } else {
+            //             bc->attacker.pokeSwitch(switchNum);
+            //         }
+            //     }
+            // }
             if(shouldContinue) {
                 log("before AI starts >> RNG advances 4");
-                if(bc->defender.aiControl & bc->defender.isSwitching & bc->defender.successfulMove) {
+                if(bc->defender.aiControl & bc->defender.isSwitching) {
                     log("Skipping first AI rng usage due to unknown reason -> ai defender is switching and took its turn");
                 } else {
                     advanceSeed(bc);
@@ -845,6 +1027,8 @@ bool doTurn(BattleContext *bc) {
         bc->terminate = true;
         return endOfTurn(bc);
     }
+    bc->attacker.isSwitching = false;
+    bc->defender.isSwitching = false;
     log("\t\t\t\t\t\t\t[ Turn " + std::to_string(bc->turnNumber) + " ]");
     if(!determineOrder(bc)) {
         // need to switch current order
@@ -865,6 +1049,8 @@ bool doTurn(BattleContext *bc) {
     PokeClient tempC = bc->attacker;
     bc->attacker = bc->defender;
     bc->defender = tempC;
+    preTurnEffects(bc, true); // attacker effects
+    preTurnEffects(bc, false); // defender effects
     if(bc->attacker.team[bc->attacker.battler].bVal.bHp > 0) {
         // only do command if we're still alive
         log("Next battler turn > Rng advances 2");

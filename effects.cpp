@@ -123,6 +123,14 @@ bool applyBurn(Pokemon *p, BattleContext *bc) {
         return false;
     }
     bool appliedBurn = applyStatus(p, MON_CONDITION_BURN, bc);
+    if(p->bVal.item == ITEM_RAWST_BERRY && appliedBurn) {
+        if(DEBUG) {
+            std::cout << "\tRawst Berry Prevents Burn" << std::endl;
+        }
+        p->bVal.item = 0; // consume rawst berry
+        p->bVal.condition = 0; // reset condition
+        return true; // the effect still technically succeeds
+    }
     return appliedBurn;
 }
 bool applyPoison(Pokemon *p, BattleContext *bc) {
@@ -148,6 +156,18 @@ bool applyParalysis(Pokemon *p, BattleContext *bc) {
         return true; // the paralysis effect still technically succeeds
     }
     return appliedParalysis;
+}
+bool applyFreeze(Pokemon *p, BattleContext *bc) {
+    bool appliedFreeze = applyStatus(p, MON_CONDITION_FREEZE, bc);
+    if(p->bVal.item == ITEM_ASPEAR_BERRY && appliedFreeze) {
+        if(DEBUG) {
+            std::cout << "\tAspear Berry Prevents Freeze" << std::endl;
+        }
+        p->bVal.item = 0; // consume aspear berry
+        p->bVal.condition = 0; // reset condition
+        return true; // the paralysis effect still technically succeeds
+    }
+    return appliedFreeze;
 }
 
 bool applyConfusion(Pokemon *p, BattleContext *bc) {
@@ -211,12 +231,12 @@ bool applyEndeavor(BattleContext *bc) {
     return false;
 }
 bool applySubstitute(BattleContext *bc) {
-    Pokemon attacker = bc->attacker.team[bc->attacker.battler];
-    if(attacker.bVal.substituteHp == 0) {
-        int subHealth = attacker.cHp / 4;
-        if(attacker.bVal.bHp > subHealth) {
-            dealDamage(&attacker, subHealth, false);
-            attacker.bVal.substituteHp = subHealth;
+    Pokemon* attacker = &bc->attacker.team[bc->attacker.battler];
+    if(attacker->bVal.substituteHp == 0) {
+        int subHealth = attacker->cHp / 4;
+        if(attacker->bVal.bHp > subHealth) {
+            dealDamage(attacker, subHealth, false);
+            attacker->bVal.substituteHp = subHealth;
             return true;
         }
     }
@@ -234,6 +254,9 @@ bool applyRecoilQuarter(BattleContext *bc) {
 
 bool applyYawn(BattleContext *bc) {
     bool appliedYawn = checkMoveEffect(&bc->defender.team[bc->defender.battler], MOVE_EFFECT_YAWN);
+    if(bc->defender.team[bc->defender.battler].bVal.condition & MON_CONDITION_ANY) {
+        appliedYawn = false; // cannot apply yawn to a pokemon with any non-volatile condition already
+    }
     if(appliedYawn) {
         bc->defender.team[bc->defender.battler].bVal.moveEffectsMask |= (1 << (MOVE_EFFECT_YAWN_SHIFT + 1));
     }
@@ -251,6 +274,61 @@ bool applyToxic(Pokemon *p, BattleContext *bc) {
     }
     return appliedPoison;
 }
+
+bool applyRevenge(BattleContext *bc) {
+    bc->cPwr = 60; // TODO -> if we ever actually need to simulate revenge doubling its power, finish this function. Otherwise, we can just leave it as is
+    return true;
+}
+
+bool applyFlinchPlus(BattleContext *bc, int condition) {
+    if((advanceSeed(bc) % 100) < 10) {
+        applyFlinch(&bc->defender.team[bc->defender.battler], bc);
+    }
+    if((advanceSeed(bc) % 100) < 10) {
+        if(condition & MON_CONDITION_PARALYSIS) {
+            applyParalysis(&bc->defender.team[bc->defender.battler], bc);
+        } else if(condition & MON_CONDITION_BURN) {
+            applyBurn(&bc->defender.team[bc->defender.battler], bc);
+        } else if(condition & MON_CONDITION_FREEZE) {
+            applyFreeze(&bc->defender.team[bc->defender.battler], bc);
+        }
+    }
+    return true;
+
+}
+
+bool applyProtect(BattleContext *bc) {
+    unsigned long protectSuccessRate[4] = {
+        0xFFFF,
+        0x7FFF, 
+        0x3FFF, 
+        0x1FFF, 
+    };
+    if(protectSuccessRate[bc->attacker.team[bc->attacker.battler].bVal.turnsProtected] >= advanceSeed(bc)){
+        bc->attacker.team[bc->attacker.battler].bVal.isProtected = true;
+        bc->attacker.team[bc->attacker.battler].bVal.turnsProtected++;
+        if(bc->attacker.team[bc->attacker.battler].bVal.turnsProtected > 3) {
+            bc->attacker.team[bc->attacker.battler].bVal.turnsProtected = 3;
+        }
+        return true;
+    } else {
+        return false;
+    }
+}
+bool applyToxicSpikes(BattleContext *bc) {
+    if(bc->defender.sideConditions & SIDE_CONDITION_TOXIC_SPIKES) {
+        if(bc->defender.toxicSpikeLayers == 1) {
+            bc->defender.toxicSpikeLayers++;
+            return true;
+        } else {
+            return false; // already applied 2 layers
+        }
+    } else {
+        bc->defender.toxicSpikeLayers = 1;
+        bc->defender.sideConditions |= SIDE_CONDITION_TOXIC_SPIKES;
+        return true;
+    }
+}
 bool applyEffect(Move move, BattleContext *bc) {
     // gigantic switch/case lol
     switch(move.effect) {
@@ -258,24 +336,31 @@ bool applyEffect(Move move, BattleContext *bc) {
         case BATTLE_EFFECT_STATUS_BURN:
             return applyBurn(&bc->defender.team[bc->defender.battler], bc);
         case BATTLE_EFFECT_PARALYZE_HIT:
+        case BATTLE_EFFECT_STATUS_PARALYZE:
             return applyParalysis(&bc->defender.team[bc->defender.battler], bc);
         case BATTLE_EFFECT_STATUS_POISON:
+        case BATTLE_EFFECT_POISON_HIT:
             return applyPoison(&bc->defender.team[bc->defender.battler], bc);
         case BATTLE_EFFECT_STATUS_CONFUSE:
         case BATTLE_EFFECT_CONFUSE_HIT:
             return applyConfusion(&bc->defender.team[bc->defender.battler], bc);
         case BATTLE_EFFECT_FLINCH_HIT:
             return applyFlinch(&bc->defender.team[bc->defender.battler], bc);
+        case BATTLE_EFFECT_LOWER_DEFENSE_HIT:
+            return modifyStat(false, Stat::DEFENSE, -1, bc);
         case BATTLE_EFFECT_ATK_DOWN_2:
             return modifyStat(false, Stat::ATTACK, -2, bc);
         case BATTLE_EFFECT_DEF_DOWN_2:
             return modifyStat(false, Stat::DEFENSE, -2, bc);
         case BATTLE_EFFECT_ACC_DOWN:
+        case BATTLE_EFFECT_LOWER_ACCURACY_HIT:
             return modifyStat(false, Stat::ACCURACY, -1, bc);
         case BATTLE_EFFECT_LOWER_SP_DEF_HIT:
             return modifyStat(false, Stat::SPECIAL_DEFENSE, -1, bc);
         case BATTLE_EFFECT_EVA_UP:
             return modifyStat(true, Stat::EVASION, 1, bc);
+        case BATTLE_EFFECT_RAISE_SP_ATK_HIT:
+            return modifyStat(true, Stat::SPECIAL_ATTACK, 1, bc);
         case BATTLE_EFFECT_TAUNT:
             return applyTaunt(&bc->defender.team[bc->defender.battler], bc);
         case BATTLE_EFFECT_PREVENT_STAT_REDUCTION:
@@ -290,6 +375,18 @@ bool applyEffect(Move move, BattleContext *bc) {
             return applyYawn(bc);
         case BATTLE_EFFECT_STATUS_BADLY_POISON:
             return applyToxic(&bc->defender.team[bc->defender.battler], bc);
+        case BATTLE_EFFECT_DOUBLE_POWER_IF_HIT:
+            return applyRevenge(bc);
+        case BATTLE_EFFECT_FLINCH_PARALYZE_HIT:
+            return applyFlinchPlus(bc, MON_CONDITION_PARALYSIS);
+        case BATTLE_EFFECT_FLINCH_BURN_HIT:
+            return applyFlinchPlus(bc, MON_CONDITION_BURN);
+        case BATTLE_EFFECT_FLINCH_FREEZE_HIT:
+            return applyFlinchPlus(bc, MON_CONDITION_FREEZE);
+        case BATTLE_EFFECT_PROTECT:
+            return applyProtect(bc);
+        case BATTLE_EFFECT_TOXIC_SPIKES:
+            return applyToxicSpikes(bc);
         default:
             return false;
     }

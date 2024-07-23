@@ -292,3 +292,69 @@ highest2 cycles: 0  starting seed: 0
 lowest2 cycles: 0  starting seed: 0
 19761323ms
 1.97613e+07ms
+
+Training with Roselia // sweet scent xp counter
+highest cycles: 30
+starting seed: 0
+lowest cycles: 30
+starting seed: 1
+highest2 cycles: 3894  starting seed: 10164494
+lowest2 cycles: 3400  starting seed: 12605453
+16944ms
+16944.8ms
+
+Saturn fight
+277170 -- seed where hippo gets to 1 hp vs toxicroak (measured from the beginning before the AI has picked its move)
+897852 -- seed where vaporeon gets to low hp vs golbat (measured from beginning before AI has picked)
+3053247439 -- seed where vaporeon gets to low vs golbat (measured from move selection screen, golbat has already picked toxic)
+23 -- seed where vaporeon crits at first opportunity measured from before the ai picks its move
+
+
+Catching Golduck
+
+909180 - seed for most steps before lvl 40 golduck appears
+It takes 96767 steps
+Note that this is on days where we have 40 encounter rate
+For special days:
+highest cycles: 106585
+starting seed: 7216102
+
+Togekiss evs
+
+How many speed EVs we get after 72 battles, given that we have or have had pokerus
+
+Signicant because Togekiss only has a limited amount of EV space if we've had pokerus the whole time. We only have 144 spare EVs after using berries to reduce defense and speed.
+Togekiss needs at least 16 speed EVs to outspeed flareon.
+
+We only do this training if we have a -speed nature, to avoid outspeeding Rapidash
+
+highest2 cycles: 120  starting seed: 84928168
+lowest2 cycles: 26  starting seed: 95366686
+
+
+---
+
+Coin flip mersenne
+
+highest cycles: 80
+starting seed: 2462131795
+2321113ms
+2.32111e+06ms
+
+_
+
+How many frames until an NPC picks a specific direction?
+
+highest cycles: 3600
+starting seed: 10537772
+lowest cycles: 0
+starting seed: 0
+highest2 cycles: 0  starting seed: 0
+lowest2 cycles: 0  starting seed: 0
+
+______
+encountering geodude/onix
+highest cycles: 6274
+starting seed: 30260966
+lowest cycles: 1
+starting seed: 13420

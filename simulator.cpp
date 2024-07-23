@@ -8,12 +8,14 @@
 #include <thread>
 #include <chrono>
 #include <string>
+#include <cmath>
 #include <filesystem>
 #include <iomanip>
 #include "pokemon.h"
 #include "battle.h"
 #include "tr_ai.h"
 #include "config.h"
+#include <experimental/filesystem>
 namespace fs = std::filesystem;
 unsigned long totalSims = 160000000UL;
 // unsigned long totalSims = 4294967295UL;
@@ -40,23 +42,40 @@ struct BattleReport {
     bool playerWin;
     int playerHp;
     int endTurn;
+    int faintedPokemon;
 };
 
 struct SimulationReport {
     unsigned long startingSeed; // the starting seed for the returned result (either the first seed we lose on, or the seed we have the lowest hp on if we win all of them)
     bool playerWin;
     int playerHp;
+    int faintedPokemon;
     unsigned long turnTracker[maxTurns]; // max_turns
 };
 struct CommandList {
     unsigned long defaultCommand;
     unsigned long commands[maxTurns][maxBranches]; // max_turns
+    unsigned long switchCommands[6]; // which pokemon to switch in at the next opportunity, 0 if no switch is needed
 };
 unsigned long parseCommand(BattleContext *bc, PokeClient *pc, unsigned long commands[maxBranches]) {
+    // branches allow for different sequences of commands for different scenarios. 
+    // branching events like using a healing item increase the branch count
+    // you can also decrease the branch count to reconverge branches if you resync them with a specific command
+    // branching occurs immediately, if you use a full heal and it can't do anything, the program will immediately
+    // increase the branch and look for a new command to do
+    // it will continuously do this until it finds a command that it can actually execute
+    // the battle context will persist the current branch. Meaning that once you're on a branch you stay on it until the fight is either over or you reconverge
+    // Commands are an array or arrays, so a command on turn 3 on branch 0 would be at commands[3][0]
+    // 
     int com = 0;
     bool branched = true;
     while(branched) {
+        if(bc->branch > maxBranches) {
+            std::cout << "Exceeded max branches: terminating" << std::endl;
+            break;
+        }
         com = commands[bc->branch];
+
         if (com & COMMAND_BRANCH_INC) {
             bc->branch++;
             com &= ~COMMAND_BRANCH_INC;
@@ -65,37 +84,45 @@ unsigned long parseCommand(BattleContext *bc, PokeClient *pc, unsigned long comm
             com &= ~COMMAND_BRANCH_DEC;
         }
         branched = false; // default to breaking while loop
-        switch(com) {
-            case COMMAND_USE_GATEAU_OR_BITE:
-                if(pc->team[pc->battler].bVal.condition > 0 || pc->team[pc->battler].bVal.volConditions & VOLATILE_CONDITION_CONFUSION) {
-                    com = COMMAND_USE_ITEM_FULL_HEAL;
-                } else {
-                    com = COMMAND_MOVE_SLOT_2;
-                }
-                break;
-            case COMMAND_USE_HYPER_OR_BITE:
+        if(com & COMMAND_USE_GATEAU_OR_BITE) {
+            if(pc->team[pc->battler].bVal.condition > 0 || pc->team[pc->battler].bVal.volConditions & VOLATILE_CONDITION_CONFUSION) {
+                com = COMMAND_USE_ITEM_FULL_HEAL;
+            } else {
+                com = COMMAND_MOVE_SLOT_2;
+            }
+        } else if(com & COMMAND_USE_HYPER_OR_BITE) {
                 if(pc->team[pc->battler].bVal.bHp < pc->team[pc->battler].cHp) {
                     com = COMMAND_USE_ITEM_HYPER_POTION;
                 } else {
                     com = COMMAND_MOVE_SLOT_2;
                 }
-                break;
-            case COMMAND_USE_ITEM_FULL_HEAL:
-                if(!pc->team[pc->battler].bVal.condition > 0 && !pc->team[pc->battler].bVal.volConditions & VOLATILE_CONDITION_CONFUSION) {
+        } else if(com & COMMAND_USE_ITEM_FULL_HEAL) {
+                if(!(pc->team[pc->battler].bVal.condition > 0) && !(pc->team[pc->battler].bVal.volConditions & VOLATILE_CONDITION_CONFUSION)) {
                     // full heal will have no use, branch
                     branched = true;
                     bc->branch++;
                 }
-                break;
-            case COMMAND_USE_ITEM_HYPER_POTION:
+        } else if(com & COMMAND_USE_ITEM_ANTIDOTE) {
+                if(!(pc->team[pc->battler].bVal.condition & MON_CONDITION_ANY_POISON)) {
+                    // no poison, branch
+                    branched = true;
+                    bc->branch++;
+                }
+        } else if(com & COMMAND_USE_ITEM_HYPER_POTION) {
                 if(pc->team[pc->battler].bVal.bHp == pc->team[pc->battler].cHp) {
                     // hp is max, branch
                     branched = true;
                     bc->branch++;
                 }
-                break;
-            default:
-                break;
+        } else if(com & COMMAND_SWITCH) {
+
+                // if we are attempting to switch, but the battler we want to send out is already out, branch. 
+                int nextBattler = log2(com & COMMAND_SWITCH);
+                nextBattler = nextBattler - COMMAND_SWITCH_OFFSET; // from 4-9 to 0-5
+                if(pc->battler == nextBattler) {
+                    branched = true;
+                    bc->branch++; 
+                }
         }
     }
     return com;
@@ -116,22 +143,33 @@ void getCommand(BattleContext *bc, CommandList cList, int turnNumber) {
         bc->attacker.command = com;
     }
 }
-
+int sumTeamHealth(PokeClient* pc, BattleReport *br) {
+    int sum = 0;
+    for(int i = 0;i<6;i++) {
+        // sum the entire team's HP
+        if(pc->team[i].level > 0){
+            if(pc->team[i].bVal.bHp == 0) {
+                br->faintedPokemon++;
+            }
+        }
+        sum = sum + pc->team[i].bVal.bHp;
+    }
+    return sum;
+}
 BattleReport simulate(unsigned long startingSeed, CommandList cList, SimulationReport *sr) {
     BattleContext bc = setupVarFight(startingSeed);
     bc.terminate = false;
     bc.branch = 0;
     // BattleContext bc = setupJupiterFight(startingSeed);
-
     // this command doesn't matter, it gets replaced later
     bc.attacker.command = COMMAND_MOVE_SLOT_2; // attacker is us
     bc.defender.command = COMMAND_MOVE_SLOT_2; // defender is them
-
-    // idk why but the seed advances 2 here
+    // idk why but the seed advances 2 or 4 here
     for(int i = 0; i < 2; i++){
         advanceSeed(&bc);
     }
     processAI(&bc); // calculate which command to use on first turn
+
     bool shouldContinue = true;
     int i = 0;
     while(shouldContinue) {
@@ -145,7 +183,9 @@ BattleReport simulate(unsigned long startingSeed, CommandList cList, SimulationR
         }
     }
     BattleReport br;
+    br.faintedPokemon = 0;
     bool didPlayerWin = true;
+
     if(bc.attacker.isWinner && bc.attacker.aiControl) {
         didPlayerWin = false;
     } else if(bc.defender.isWinner && bc.defender.aiControl) {
@@ -153,9 +193,24 @@ BattleReport simulate(unsigned long startingSeed, CommandList cList, SimulationR
     } else if(!bc.attacker.isWinner && !bc.defender.isWinner) {
         didPlayerWin = false; // somehow the fight didn't finish
     } else if(bc.attacker.isWinner && !bc.attacker.aiControl) {
-        br.playerHp = bc.defender.team[bc.defender.battler].bVal.bHp;
+        if(WATCH_POKEMON < 0) {
+            WATCH_POKEMON = bc.attacker.battler;
+        }
+        if(WATCH_POKEMON == 7) {
+            br.playerHp = sumTeamHealth(&bc.attacker, &br);
+        } else {
+            br.playerHp = bc.attacker.team[WATCH_POKEMON].bVal.bHp;
+        }
     } else {
-        br.playerHp = bc.attacker.team[bc.attacker.battler].bVal.bHp;
+        if(WATCH_POKEMON < 0) {
+            WATCH_POKEMON = bc.defender.battler;
+        }
+        if(WATCH_POKEMON == 7) {
+            br.playerHp = sumTeamHealth(&bc.defender, &br);
+        } else {
+            br.playerHp = bc.defender.team[WATCH_POKEMON].bVal.bHp;
+
+        }
     }
     br.playerWin = didPlayerWin;
     br.endTurn = i;
@@ -194,9 +249,15 @@ SimulationReport runSimulations(Range r, CommandList cList, std::vector<LossLog>
                     j++;
                 }
             }
-            if(br.playerHp < sr.playerHp){
+            if(br.faintedPokemon > sr.faintedPokemon) {
                 sr.playerHp = br.playerHp;
                 sr.startingSeed = tempSeed;
+                sr.faintedPokemon = br.faintedPokemon;
+            } else {
+                if(br.playerHp < sr.playerHp && br.faintedPokemon == sr.faintedPokemon){
+                    sr.playerHp = br.playerHp;
+                    sr.startingSeed = tempSeed;
+                }
             }
         }
         if(EXIT_EARLY || (j >= (r.chunkSize - 1))) {
@@ -357,6 +418,11 @@ int main(int argc, char* argv[]) {
             // name output directory
             outputDirName = argv[i+1];
         }
+        if(arg == "-p") {
+            // Output results regarding lowest hp regarding the given team slot
+            char* endPtr;
+            WATCH_POKEMON = std::strtol(argv[i+1], &endPtr, 10);
+        }
     }
     if(simCount == 0) {
         simCount = totalSims;
@@ -392,21 +458,104 @@ int main(int argc, char* argv[]) {
     int remainder = end % divisor; // extra seeds
     std::vector<Range> ranges;
     CommandList cList = {};
+    for(i=0;i<6;i++) {
+        cList.switchCommands[i] = 0;
+    }
     for(i=0;i<maxTurns ;i++) { // max_turns
         for(j=0;j<maxBranches; j++) {
             cList.commands[i][j] = 0;
         }
     }
     cList.defaultCommand = COMMAND_MOVE_SLOT_2;
-    cList.commands[0][0] = COMMAND_USE_ITEM_GUARD_SPEC;
-    cList.commands[1][0] = COMMAND_SWITCH_2;
-    cList.commands[2][0] = COMMAND_USE_ITEM_X_ACCURACY;
-    cList.commands[3][0] = COMMAND_USE_ITEM_HYPER_POTION;
-    cList.commands[4][0] = COMMAND_USE_ITEM_FULL_HEAL;
-    cList.commands[4][1] = COMMAND_MOVE_SLOT_2;
-    cList.commands[5][0] = COMMAND_MOVE_SLOT_2;
-    cList.commands[5][1] = COMMAND_TERMINATE;
-    cList.commands[6][0] = COMMAND_TERMINATE;
+    // volkner commands
+    // Move hippoMoveset[4] = {Earthquake, Yawn, Protect, Earthquake};
+    // Move vaporMoveset[4] = {Protect, Substitute, Substitute, Substitute};
+    // Move infernapeMoveset[4] = {Protect, Protect, Protect, Protect};
+    // Move rioluMoveset[4] = {DoubleTeam, Protect, Protect, Protect};
+    // Move roseradeMoveset[4] = {Protect, ToxicSpikes, Protect, Protect};
+    // Move haunterMoveset[4] = {Protect, SuckerPunch, Protect, Protect};
+    // p1.team[0] = hippo;
+    // p1.team[1] = vapor;
+    // p1.team[2] = roserade;
+    // p1.team[3] = haunter;
+    // p1.team[4] = riolu;
+    // p1.team[5] = infernape;
+    cList.commands[0][0] = COMMAND_MOVE_SLOT_1 | COMMAND_SWITCH_5; // earthquake 
+    cList.commands[1][0] = COMMAND_MOVE_SLOT_1 | COMMAND_SWITCH_1; // die by quick attack, send in hippo
+    cList.commands[2][0] = COMMAND_MOVE_SLOT_3; // protect against focus blast
+    cList.commands[3][0] = COMMAND_SWITCH_4; // switch to haunter
+    cList.commands[4][0] = COMMAND_MOVE_SLOT_1; // use protect
+    cList.commands[5][0] = COMMAND_SWITCH_3; // send in roserade
+    cList.commands[6][0] = COMMAND_MOVE_SLOT_2; // use toxic spikes
+    cList.commands[7][0] = COMMAND_MOVE_SLOT_1; // use protect
+    cList.commands[8][0] = COMMAND_SWITCH_4; // switch to haunter again
+    cList.commands[9][0] = COMMAND_SWITCH_1; // back to hippo
+    cList.commands[10][0] = COMMAND_SWITCH_4; // back to haunter
+    cList.commands[11][0] = COMMAND_MOVE_SLOT_2 | COMMAND_SWITCH_2; // use sucker punch, switch to vapor when raichu KOed
+    cList.commands[12][0] = COMMAND_MOVE_SLOT_1; // protect
+    cList.commands[13][0] = COMMAND_SWITCH_1; // to hippo
+    cList.commands[14][0] = COMMAND_MOVE_SLOT_3; // protect
+    cList.commands[15][0] = COMMAND_SWITCH_6; // send in infernape
+    cList.commands[16][0] = COMMAND_SWITCH_1; // back to hippo
+    cList.commands[17][0] = COMMAND_MOVE_SLOT_2; // yawn
+    cList.commands[18][0] = COMMAND_MOVE_SLOT_3; // protect
+    cList.commands[19][0] = COMMAND_MOVE_SLOT_1 | COMMAND_SWITCH_2; // earthquake, switch to vapor if we KOed
+    cList.commands[20][0] = COMMAND_SWITCH_2; // switch to vapor, but we might branch here, and if we KO, back to hippo
+    cList.commands[21][0] = COMMAND_SWITCH_1; // might branch, back to hippo
+    cList.commands[22][0] = COMMAND_MOVE_SLOT_3; // protect
+    cList.commands[23][0] = COMMAND_MOVE_SLOT_1; // earthquake. In this branch, electivire has only suffered 1 turn of poison/sandstorm, but we still deal enough damage
+
+    cList.commands[21][2] = COMMAND_MOVE_SLOT_3; // protect
+    cList.commands[22][2] = COMMAND_MOVE_SLOT_1; // earthquake should KO;
+
+
+    cList.commands[20][1] = COMMAND_SWITCH_1; // switch to hippo on the branch
+    cList.commands[21][1] = COMMAND_MOVE_SLOT_3; // use protect on first branch
+    cList.commands[22][1] = COMMAND_MOVE_SLOT_1; // earthquake KOs electivire
+    std::cout << "Loaded Commands" << std::endl;
+    // cList.commands[1][0] = COMMAND_SWITCH_1;
+    // cList.commands[2][0] = COMMAND_SWITCH_2;
+    // cList.commands[3][0] = COMMAND_SWITCH_1;
+    // cList.commands[4][0] = COMMAND_SWITCH_2;
+    // cList.commands[5][0] = COMMAND_MOVE_SLOT_1; 
+
+    // cList.switchCommands[0] = COMMAND_SWITCH_1;
+    // saturn commands
+    // cList.commands[0][0] = COMMAND_USE_ITEM_X_SPEED;
+
+    // cList.commands[1][0] = COMMAND_USE_ITEM_ANTIDOTE;
+    // cList.commands[2][0] = COMMAND_USE_ITEM_FULL_HEAL;
+    // cList.commands[3][0] = COMMAND_MOVE_SLOT_2;
+    // cList.commands[4][0] = COMMAND_USE_ITEM_ANTIDOTE;
+    // cList.commands[5][0] = COMMAND_USE_ITEM_FULL_HEAL;
+    // cList.commands[6][0] = COMMAND_MOVE_SLOT_2;
+
+    // cList.commands[1][1] = COMMAND_USE_ITEM_FULL_HEAL;
+    // cList.commands[2][1] = COMMAND_MOVE_SLOT_2;
+    // cList.commands[3][1] = COMMAND_USE_ITEM_ANTIDOTE;
+    // cList.commands[4][1] = COMMAND_USE_ITEM_FULL_HEAL;
+    // cList.commands[5][1] = COMMAND_MOVE_SLOT_2;
+
+    // cList.commands[1][2] = COMMAND_MOVE_SLOT_2;
+    // cList.commands[2][2] = COMMAND_USE_ITEM_ANTIDOTE;
+    // cList.commands[3][2] = COMMAND_USE_ITEM_FULL_HEAL;
+    // cList.commands[4][2] = COMMAND_MOVE_SLOT_2;
+
+    // cList.commands[2][3] = COMMAND_USE_ITEM_FULL_HEAL;
+    // cList.commands[3][3] = COMMAND_MOVE_SLOT_2;
+
+    // cList.commands[2][4] = COMMAND_MOVE_SLOT_2;
+    // done with saturn commands
+
+    // cList.commands[0][0] = COMMAND_USE_ITEM_GUARD_SPEC;
+    // cList.commands[1][0] = COMMAND_SWITCH_2;
+    // cList.commands[2][0] = COMMAND_USE_ITEM_X_ACCURACY;
+    // cList.commands[3][0] = COMMAND_USE_ITEM_HYPER_POTION;
+    // cList.commands[4][0] = COMMAND_USE_ITEM_FULL_HEAL;
+    // cList.commands[4][1] = COMMAND_MOVE_SLOT_2;
+    // cList.commands[5][0] = COMMAND_MOVE_SLOT_2;
+    // cList.commands[5][1] = COMMAND_TERMINATE;
+    // cList.commands[6][0] = COMMAND_TERMINATE;
     // cList.commands[1] = COMMAND_MOVE_SLOT_3;
 
     // cList.commands[1] = COMMAND_USE_ITEM_GUARD_SPEC;
@@ -417,6 +566,7 @@ int main(int argc, char* argv[]) {
 
     // simulate a specific seed
     if(runIndividualSeed) {
+        std::cout << "Running individual seed" << std::endl;
         simulate(individualSeed, cList, &val);
         return 0;
     }
@@ -424,6 +574,7 @@ int main(int argc, char* argv[]) {
     unsigned long startIndex = 0;
     unsigned long endIndex = 0;
     int extra = 0;
+    std::cout << "Chunk size: " << chunkSize << std::endl;
     for(i = 0; i < divisor; i++){
         if(runSpecificSeeds) {
             extra = (i < remainder) ? 1 : 0;
@@ -451,8 +602,8 @@ int main(int argc, char* argv[]) {
             resultsFile << "Loss -> Seed: " << val.startingSeed << "\n";
             std::cout << val.startingSeed << "\n";
         } else {
-            resultsFile << "Player won. Lowest hp -> " << val.playerHp << " // Seed: " << val.startingSeed << "\n";
-            std::cout << "Player won. Lowest hp -> " << val.playerHp << " // Seed: " << val.startingSeed << std::endl;
+            resultsFile << "Player won. Lowest hp -> " << val.playerHp << " // Seed: " << val.startingSeed << " // Fainted: " << val.faintedPokemon << "\n";
+            std::cout << "Player won. Lowest hp -> " << val.playerHp << " // Seed: " << val.startingSeed << " // Fainted: " << val.faintedPokemon << std::endl;
         }
 
         for(i = 0;i<maxTurns;i++){ // max_turns

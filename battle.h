@@ -33,21 +33,29 @@
 #define COMMAND_USE_ITEM_PRLZ_HEAL 1 << 13
 #define COMMAND_USE_ITEM_FULL_HEAL 1 << 14
 #define COMMAND_USE_ITEM_X_ACCURACY 1 << 15
+#define COMMAND_USE_ITEM_X_SPEED 1 << 16
+#define COMMAND_USE_ITEM_ANTIDOTE 1 << 17
+#define COMMAND_USE_ITEM_FULL_RESTORE 1 << 18
 #define COMMAND_USE_ITEM ( COMMAND_USE_ITEM_SUPER_POTION \
                          | COMMAND_USE_ITEM_GUARD_SPEC \
                          | COMMAND_USE_ITEM_HYPER_POTION \
                          | COMMAND_USE_ITEM_PRLZ_HEAL \
                          | COMMAND_USE_ITEM_FULL_HEAL \
-                         | COMMAND_USE_ITEM_X_ACCURACY)
+                         | COMMAND_USE_ITEM_X_ACCURACY \
+                         | COMMAND_USE_ITEM_X_SPEED \
+                         | COMMAND_USE_ITEM_ANTIDOTE \
+                         | COMMAND_USE_ITEM_FULL_RESTORE)
 // option selects
-#define COMMAND_USE_GATEAU_OR_BITE 1 << 16
-#define COMMAND_USE_HYPER_OR_BITE 1 << 17
+#define COMMAND_USE_GATEAU_OR_BITE 1 << 27
+#define COMMAND_USE_HYPER_OR_BITE 1 << 28
 
-#define COMMAND_BRANCH_INC 1 << 19
-#define COMMAND_BRANCH_DEC 1 << 20
+#define COMMAND_BRANCH_INC 1 << 20
+#define COMMAND_BRANCH_DEC 1 << 21
 
 #define TRIGGER_INTIMIDATE 1<<0
 #define TRIGGER_SAND_STREAM 1<<1
+#define TRIGGER_TOXIC_SPIKES 1<<2
+
 
 #define MOVE_STATUS_MISSED              (1 << 0)
 #define MOVE_STATUS_SUPER_EFFECTIVE     (1 << 1)
@@ -65,7 +73,6 @@ bool doTurn(BattleContext *bc);
 bool checkStatusDisruption(BattleContext *bc, Move move);
 void updateMoveBuffers(BattleContext *bc, Move move);
 void updateFlagsWhenHit(BattleContext *bc, Move move);
-
 enum class FieldCondition {
     NONE,
     MIST,
@@ -96,6 +103,7 @@ struct PokeClient {
     // specific effect turn counters
     int safeGuardTurns;
     int mistTurns;
+    int toxicSpikeLayers;
     bool aiControl;
     int aiJumpNum;
     bool isWinner;
@@ -131,7 +139,8 @@ struct BattleContext {
     int speedTieBreakers[4];
     bool terminate;
     int branch; // what branch we are on.  Whenever divergence occurs (using a potion that doesn't heal, trying to cure status that doesn't exist) the branch increases by 1
-
+    unsigned long switchCommands[6]; // who to switch to when an opponent faints
+    int switchCommandIndex;
 };
 struct Fraction {
     int numerator;
@@ -167,4 +176,7 @@ static const Fraction StatBonusByStage[] = {
     {7, 2},//11
     {8, 2},//12
 };
+
+int calcSpeed(PokeClient *pc);
+
 #endif /* BATTLE_H_ */

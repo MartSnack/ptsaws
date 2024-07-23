@@ -51,6 +51,23 @@ bool AI_IfHpOver(BattleContext *bc, AiContext *ac, int value, bool target = fals
     return ((pc.team[pc.battler].bVal.bHp * 100) / pc.team[pc.battler].cHp) > value;
 }
 
+// checks for move effects in the current battlers moveset. Defaults to CHECK_ATTACK (check self).
+// returns true if any of the moves in the battler's moveset match the given effect
+bool AI_IfHasMoveEffect(BattleContext *bc, AiContext *ac, int effect, bool target = false) {
+    PokeClient pc;
+    if(target) {
+        pc = ac->target;
+    } else {
+        pc = ac->self;
+    }
+    int i;
+    for(i=0; i < 4; i++) {
+        if(pc.team[pc.battler].moveset[i].effect == effect) {
+            return true;
+        }
+    }
+    return false;
+}
 // comparator -> 0 for under, 1 for equal, 2 for over
 // stg -> 0/atk,1/def,2/
 // value -> what we compare to
@@ -137,7 +154,9 @@ bool AI_IfVolCondition(BattleContext *bc, AiContext *ac, int volCondition, bool 
 
 // defaults to IF_FIRST_DEFENCE
 bool AI_IfFirst(BattleContext *bc, AiContext *ac, bool target = true) {
-    if(determineOrder(bc)) {
+    int speed1 = calcSpeed(&ac->target);
+    int speed2 = calcSpeed(&ac->self);
+    if(speed2 > speed1) {
         // attacker goes first
         return !target;
     } else {
@@ -394,12 +413,27 @@ bool AI_ShouldUseItem(BattleContext *bc, AiContext *ac) {
             if(item == ITEM_NONE) {
                 continue;
             }
+            if(item == ITEM_FULL_RESTORE) {
+                if(ac->self.team[ac->self.battler].bVal.bHp &&
+                ac->self.team[ac->self.battler].bVal.bHp < (ac->self.team[ac->self.battler].cHp / 4)){
+                    result = true;
+                    command = COMMAND_USE_ITEM_FULL_RESTORE;
+                }
+            }
             if(item == ITEM_SUPER_POTION) {
                 if(ac->self.team[ac->self.battler].bVal.bHp &&
                 ac->self.team[ac->self.battler].bVal.bHp < (ac->self.team[ac->self.battler].cHp / 4) ||
                 (ac->self.team[ac->self.battler].cHp - ac->self.team[ac->self.battler].bVal.bHp) > 50 ){
                     result = true;
                     command = COMMAND_USE_ITEM_SUPER_POTION;
+                }
+            }
+            if(item == ITEM_HYPER_POTION) {
+                if(ac->self.team[ac->self.battler].bVal.bHp &&
+                ac->self.team[ac->self.battler].bVal.bHp < (ac->self.team[ac->self.battler].cHp / 4) ||
+                (ac->self.team[ac->self.battler].cHp - ac->self.team[ac->self.battler].bVal.bHp) > 200 ){
+                    result = true;
+                    command = COMMAND_USE_ITEM_HYPER_POTION;
                 }
             }
 
@@ -472,6 +506,7 @@ void processAI(BattleContext *bc) {
         }
         ac.currentIndex = 0;
         ac.currentScore = 0;
+
         // the order in which AI does its moves is all four moves for basic AI, all four for Strong, all four for expert, ETC
         // the commented out code was made thinking it was done one move at a time for all the AI types
         for(i = 0;i<4;i++) {
@@ -556,7 +591,7 @@ void processAI(BattleContext *bc) {
         } else {
             pos = COMMAND_MOVE_SLOT_4;
         }
-        ailog(pos);
+        ailog(result + 1);
         bc->attacker.command = pos;
     }
 
@@ -699,6 +734,7 @@ bool AI_BasicSeq(BattleContext *bc, AiContext *ac) {
 bool AI_CheckEffect(BattleContext *bc, AiContext *ac) {
     switch(ac->self.team[ac->self.battler].moveset[ac->currentIndex].effect) {
         case(BATTLE_EFFECT_STATUS_POISON): // 66
+        case(BATTLE_EFFECT_STATUS_BADLY_POISON):
             return AI_BasicPoison(bc, ac); 
         case(BATTLE_EFFECT_ATK_DOWN): // 18
         case(BATTLE_EFFECT_ATK_DOWN_2): // 58
@@ -712,12 +748,48 @@ bool AI_CheckEffect(BattleContext *bc, AiContext *ac) {
         case(BATTLE_EFFECT_STATUS_CONFUSE): // 49
             return AI_BasicConfuse(bc, ac);
         case(BATTLE_EFFECT_SET_HP_EQUAL_TO_USER):
+        case(BATTLE_EFFECT_RECHARGE_AFTER):
             return AI_BasicRiskyDamage(bc, ac);
+        case(BATTLE_EFFECT_STATUS_PARALYZE):
+            return AI_BasicParalyze(bc, ac);
         default:
             return true;
     }
 }
 
+bool AI_BasicParalyze(BattleContext *bc, AiContext *ac) {
+    AI_CheckTypeAdvantage(bc, ac);
+    if(ac->currentTypeAdvantage == IMMUNE_EFFECTIVE) {
+        return AI_DEC10(ac);
+    }
+    AbilityId enemyAbility = AI_CheckAbility(bc, ac);
+    if(enemyAbility == LIMBER) {
+        return AI_DEC10(ac);
+    }
+    if(enemyAbility == MAGIC_GUARD) {
+        return AI_DEC10(ac);
+    }
+    AbilityId selfAbility = AI_CheckAbility(bc, ac, false);
+    // checking mold breaker after we already checked for limber/magic guard lol
+    if(selfAbility == MOLD_BREAKER){
+        // control flow
+    }
+    if(ac->self.team[ac->self.battler].moveset[ac->currentIndex].id == MoveId::THUNDER_WAVE) {
+        // normally we wouldn't need to reassign this but the game does, no memory :/
+        AbilityId enemyAbilityAgain = AI_CheckAbility(bc, ac);
+        if(enemyAbilityAgain == MOTOR_DRIVE || enemyAbilityAgain == VOLT_ABSORB){
+            return AI_DEC10(ac);
+        }
+    }
+    if(AI_IfCond(bc, ac, MON_CONDITION_ANY, true)) {
+        return AI_DEC10(ac);
+    }
+    if(ac->target.sideConditions & SIDE_CONDITION_SAFEGUARD) {
+        return AI_DEC10(ac);
+    }
+    return true;
+
+}
 bool AI_BasicConfuse(BattleContext *bc, AiContext *ac) {
     if(AI_IfVolCondition(bc, ac, VOLATILE_CONDITION_CONFUSION, true)) {
         return AI_DEC5(ac);
@@ -946,10 +1018,119 @@ bool AI_ExpertSeq(BattleContext *bc, AiContext *ac) {
             return AI_ExpertHighCritical(bc, ac);
         case(BATTLE_EFFECT_SET_HP_EQUAL_TO_USER):
             return AI_ExpertEndeavor(bc, ac);
-
+        case(BATTLE_EFFECT_STATUS_BADLY_POISON):
+            return AI_ExpertToxic(bc, ac);
+        case(BATTLE_EFFECT_DOUBLE_POWER_IF_HIT):
+            return AI_ExpertRevenge(bc, ac);
+        case(BATTLE_EFFECT_STATUS_PARALYZE):
+            return AI_ExpertParalyze(bc, ac);
+        case(BATTLE_EFFECT_RECHARGE_AFTER):
+            return AI_ExpertRechargeTurn(bc, ac);
         default:
             return true;
     }
+}
+bool AI_ExpertRechargeTurn(BattleContext *bc, AiContext *ac) {
+    AI_CheckTypeAdvantage(bc, ac);
+    if(ac->currentTypeAdvantage == IMMUNE_EFFECTIVE || ac->currentTypeAdvantage == QUAD_NOT_EFFECTIVE || ac->currentTypeAdvantage == NOT_EFFECTIVE)  {
+        AI_INCDEC(ac, -1);
+        return true;
+    }
+    AbilityId selfAbility =AI_CheckAbility(bc, ac, false);
+    if(selfAbility == TRUANT){
+        if(AI_IfRndUnder(bc, 80)) {
+            return true;
+        } else {
+            AI_INCDEC(ac, 1);
+            return true;
+        }
+    }
+    if(AI_IfFirst(bc, ac)) {
+        // defender is faster
+        if(AI_IfHpUnder(bc, ac, 60)) {
+            return true;
+        } else {
+            AI_INCDEC(ac, -1);
+            return true;
+        }
+    } else {
+        if(AI_IfHpOver(bc, ac, 40)) {
+            AI_INCDEC(ac, -1);
+        }
+    }
+    return true;
+}
+bool AI_ExpertParalyze(BattleContext *bc, AiContext *ac) {
+    if(AI_IfFirst(bc,ac)){
+        if(AI_IfRndUnder(bc, 20)) {
+            return true;
+        } else {
+            AI_INCDEC(ac, 3);
+            return true;
+        }
+    }
+
+    if(AI_IfHpOver(bc, ac, 70)) {
+        return true;
+    }
+    AI_INCDEC(ac, -1);
+    return true; 
+}
+bool AI_ExpertRevenge(BattleContext *bc, AiContext *ac) {
+    if(AI_IfCond(bc, ac, MON_CONDITION_SLEEP, true)) {
+        AI_INCDEC(ac, -2);
+        return true;
+    }
+    if(AI_IfVolCondition(bc, ac, VOLATILE_CONDITION_ATTRACT, true) || AI_IfVolCondition(bc, ac, VOLATILE_CONDITION_CONFUSION, true)){
+        AI_INCDEC(ac, -2);
+        return true;
+    }
+    if(AI_IfRndUnder(bc, 180)) {
+        AI_INCDEC(ac, -2);
+        return true;
+    }
+    AI_INCDEC(ac, 2);
+    return true;
+}
+bool AI_ExpertToxic(BattleContext *bc, AiContext *ac) {
+    int i;
+    for(i=0;i < 4; i++) {
+        if(ac->self.team[ac->self.battler].moveset[i].id != MoveId::NO_MOVE && ac->self.team[ac->self.battler].moveset[i].power > 0) {
+            break;
+        }
+    }
+    if(i == 4) {
+        return AI_ExpertToxic_CheckEffects(bc, ac);
+    }
+    if(AI_IfHpOver(bc, ac, 50)) {
+        return AI_ExpertToxic_CheckHp(bc, ac);
+    }
+    if(AI_IfRndUnder(bc, 50)) {
+        return AI_ExpertToxic_CheckHp(bc, ac);
+    }
+    AI_INCDEC(ac, -3);
+    return AI_ExpertToxic_CheckHp(bc, ac);
+}
+bool AI_ExpertToxic_CheckHp(BattleContext *bc, AiContext *ac) {
+    if(AI_IfHpOver(bc, ac, 50, true)) {
+        return AI_ExpertToxic_CheckEffects(bc, ac);
+    }
+    if(AI_IfRndUnder(bc, 50)) {
+        return AI_ExpertToxic_CheckEffects(bc, ac);
+    }
+    AI_INCDEC(ac, -3);
+    return AI_ExpertToxic_CheckEffects(bc, ac);
+
+}
+bool AI_ExpertToxic_CheckEffects(BattleContext *bc, AiContext *ac) {
+    if(AI_IfHasMoveEffect(bc, ac, BATTLE_EFFECT_SP_DEF_UP) || AI_IfHasMoveEffect(bc, ac, BATTLE_EFFECT_PROTECT)){
+        if(AI_IfRndUnder(bc, 60)) {
+            return true; // aiend
+        }
+        AI_INCDEC(ac, 2);
+        return true; // aiend
+    }
+    return true; // aiend
 }
 
 bool AI_ExpertBypassAccuracy(BattleContext *bc, AiContext *ac) {

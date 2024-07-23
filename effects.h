@@ -176,6 +176,8 @@ enum class Stat {
 
 bool applyEffect(Move move, BattleContext *bc);
 bool applyMist(BattleContext *bc);
+bool applyPoison(Pokemon *p, BattleContext *bc);
+bool applyToxic(Pokemon *p, BattleContext *bc);
 bool modifyStat(bool affectSelf, Stat stat, int change, BattleContext *bc);
 bool applySleep(Pokemon *p, BattleContext *bc, bool bypass = false);
 #endif

@@ -9,6 +9,10 @@
 #include <chrono>
 #include <string>
 
+// simulates the mersenne rng of platinum
+// mersenne is seeded the same way that the lcrng is, but it produces values much differently
+// once you finish a simulation you can produce the 624 integer long sequence that is the actual seed for the mersenne value
+// note that this is only accurate to a stable mersenne seed, IE, you don't advance the mersenne frame arbitrarily before beginning the simulation
 struct Foo {
     unsigned long seed;
     unsigned short result;
@@ -216,6 +220,26 @@ Seed fantinaSim(Range r) {
 
 }
 
+Seed coinFlipSim(Range r) {
+    Seed retSeed = {0, 0};
+    int cycles;
+    MTRNG_CONTEXT rngc;
+    rngc.sMTRNG_Size = 624 + 1;
+    for(int i = r.start; i < r.stop; i++){
+        MTRNG_SetSeed(i, &rngc);
+        cycles = 0;
+        for(int j = 0; j < 100; j++) {
+            // flip a coin 100 times
+            cycles = cycles + (MTRNG_Next(&rngc) & 1);
+        }
+        if(cycles > retSeed.cycles) {
+            retSeed.cycles = cycles;
+            retSeed.startingSeed = i;
+        }
+    }
+    return retSeed;
+
+}
 void displaySeed(unsigned long i) {
     MTRNG_CONTEXT rngc;
     rngc.sMTRNG_Size = 624 + 1;
@@ -224,7 +248,7 @@ void displaySeed(unsigned long i) {
 int main()
 {
     std::cout<<"<booting>"<<std::endl;
-    displaySeed(1374138510);
+    displaySeed(2462131795);
     return 0;
 
     using std::chrono::high_resolution_clock;
@@ -234,7 +258,7 @@ int main()
     auto t1 = high_resolution_clock::now();
     unsigned long end = 4294967294UL;
     // unsigned long end = 169496720UL;
-    // unsigned long end = 160000000UL;
+    // unsigned long end = 16000000UL;
     int divisor = 16; // how many chunks to use
     unsigned long neow = end/divisor;
     Seed val;
@@ -246,7 +270,7 @@ int main()
     // bigger seed for high/low stuff
     std::vector<std::future<Seed>> futures;
     for(auto &e : ranges){
-        futures.push_back(std::async(fantinaSim, e));
+        futures.push_back(std::async(coinFlipSim, e));
     }
     //retrive and print the value stored in the future
     for(auto &e : futures) {

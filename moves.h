@@ -9,6 +9,10 @@
 #define RANGE_TARGET 0
 #define RANGE_SELF 1
 
+#define FLAG_MAKES_CONTACT 1<<0
+#define FLAG_CAN_PROTECT 1<<1
+#define FLAG_CONTACT_PROTECT (FLAG_MAKES_CONTACT | FLAG_CAN_PROTECT)
+
 enum Type {
     Normal,
     Fighting,
@@ -63,10 +67,38 @@ enum class MoveId {
     YAWN,
     TAKE_DOWN,
     TOXIC,
+    SUPERSONIC,
+    AIR_CUTTER,
+    SURF,
+    REVENGE,
+    FAINT_ATTACK,
+    MUD_BOMB,
+    POISON_JAB,
+    EARTHQUAKE,
+    //
+    CHARGE_BEAM,
+    THUNDER_WAVE, // niy ai
+    IRON_TAIL,
+    SIGNAL_BEAM,
+    FOCUS_BLAST,
+    THUNDER_FANG,
+    FIRE_FANG,
+    CRUNCH,
+    ICE_FANG,
+    THUNDERPUNCH,
+    FIRE_PUNCH,
+    GIGA_IMPACT,
+
+    PROTECT,
+    TOXIC_SPIKES,
+    SUCKER_PUNCH,
+
+
 };
 struct Move {
         MoveId id;
         std::string name;
+        int flags;
         int power;
         int accuracy;
         bool secondary;
@@ -80,7 +112,7 @@ struct Move {
         bool disabled;
         int range;
         Move();
-        Move(MoveId _id, std::string name, int _power, int _accuracy , bool _secondary, int _secondaryAccuracy, int _effect, Type _moveType, DamageType defend, DamageType attack, int priority, bool _highCritRatio, int range);
+        Move(MoveId _id, std::string name, int flags, int _power, int _accuracy , bool _secondary, int _secondaryAccuracy, int _effect, Type _moveType, DamageType defend, DamageType attack, int priority, bool _highCritRatio, int range);
 };
 extern Move Empty;
 extern Move Struggle;
@@ -107,6 +139,29 @@ extern Move SandAttack;
 extern Move Yawn;
 extern Move TakeDown;
 extern Move Toxic;
+extern Move AirCutter;
+extern Move Supersonic;
+extern Move Surf;
+extern Move Revenge;
+extern Move PoisonJab;
+extern Move FaintAttack;
+extern Move MudBomb;
+extern Move Earthquake;
+//
+extern Move ChargeBeam;
+extern Move ThunderWave;
+extern Move IronTail;
+extern Move SignalBeam;
+extern Move FocusBlast;
+extern Move ThunderFang;
+extern Move FireFang;
+extern Move IceFang;
+extern Move Crunch;
+extern Move ThunderPunch;
+extern Move FirePunch;
+extern Move GigaImpact;
 
-
+extern Move Protect;
+extern Move ToxicSpikes;
+extern Move SuckerPunch;
 #endif /* MOVES_H_ */

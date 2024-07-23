@@ -167,4 +167,15 @@ bool AI_ExpertBypassAccuracy(BattleContext *bc, AiContext *ac);
 bool AI_ExpertBypassAccuracy_1(BattleContext *bc, AiContext *ac);
 bool AI_ExpertBypassAccuracy_2(BattleContext *bc, AiContext *ac);
 
+bool AI_ExpertToxic(BattleContext *bc, AiContext *ac);
+bool AI_ExpertToxic_CheckEffects(BattleContext *bc, AiContext *ac);
+bool AI_ExpertToxic_CheckHp(BattleContext *bc, AiContext *ac);
+
+bool AI_ExpertRevenge(BattleContext *bc, AiContext *ac);
+
+bool AI_BasicParalyze(BattleContext *bc, AiContext *ac);
+bool AI_ExpertParalyze(BattleContext *bc, AiContext *ac);
+
+bool AI_ExpertRechargeTurn(BattleContext *bc, AiContext *ac);
+
 #endif /*TR_AI_H*/

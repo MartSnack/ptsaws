@@ -5,4 +5,5 @@ extern int DEBUG;
 extern int EXIT_EARLY;
 extern const int lossTrackerSize;
 extern int WATCH_TURN;
+extern int WATCH_POKEMON;
 #endif // CONFIG_H

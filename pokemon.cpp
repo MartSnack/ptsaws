@@ -42,7 +42,7 @@ Nature quirky = {100,100,100,100,100};
 Nature lonely = {110,90,100,100,100};
 Nature brave = {110,100,100,100,90};
 Nature adamant = {110,100,90,100,100};
-Nature naughty = {110,100,100,110,100};
+Nature naughty = {110,100,100,90,100};
 Nature bold = {90,110,100,100,100};
 Nature relaxed = {100,110,100,100,90};
 Nature impish = {100,110,90,100,100};
@@ -71,8 +71,19 @@ std::map<Mons, PokeInfo> pokemap = {
     {EEVEE, PokeInfo("Eevee", 55, 55, 50, 45, 65, 55, Type::Normal, Type::None, RUN_AWAY, ADAPTABILITY)},
     {HIPPOPOTAS, PokeInfo("Hippopotas", 68, 72, 78, 38, 42, 32, Type::Ground, Type::None, SAND_STREAM)},
     {TOGETIC, PokeInfo("Togetic", 55, 40, 85, 80, 105, 40, Type::Normal, Type::Flying, HUSTLE)},
-    {VAPOREON, PokeInfo("Vaporeon", 130, 65, 60, 110, 95, 65, Type::Water, Type::None, WATER_ABSORB)}
-
+    {VAPOREON, PokeInfo("Vaporeon", 130, 65, 60, 110, 95, 65, Type::Water, Type::None, WATER_ABSORB, WATER_ABSORB)},
+    {GOLBAT, PokeInfo("Golbat", 75,80,70,65,75,90,Type::Poison,Type::Flying,INNER_FOCUS)},
+    {TOXICROAK, PokeInfo("Toxicroak", 83, 106, 65, 86, 65, 85, Type::Poison, Type::Fighting, ANTICIPATION, DRY_SKIN)},
+    {HIPPOWDON, PokeInfo("Hippowdon", 108, 112, 118, 68, 72, 47, Type::Ground, Type::None, SAND_STREAM)},
+    {JOLTEON, PokeInfo("Jolteon", 65, 65, 60, 110, 95, 130, Type::Electric, Type::None, VOLT_ABSORB, VOLT_ABSORB)},
+    {RAICHU, PokeInfo("Raichu", 60, 90, 55, 90, 80, 100, Type::Electric, Type::None, STATIC)},
+    {ELECTIVIRE, PokeInfo("Electivire", 75, 123, 67, 95, 85, 95, Type::Electric, Type::None, MOTOR_DRIVE)},
+    {LUXRAY, PokeInfo("Luxray", 80, 120, 79, 95, 79, 70, Type::Electric, Type::None, RIVALRY, INTIMIDATE)},
+    {TOGEKISS, PokeInfo("Togekiss", 85, 50, 95, 120, 115, 80, Type::Normal, Type::Flying, HUSTLE, SERENCE_GRACE)},
+    {ROSERADE, PokeInfo("Roserade", 60, 70, 55, 125, 105, 90, Type::Grass, Type::Poison, NATURAL_CURE, POISON_POINT)},
+    {HAUNTER, PokeInfo("Haunter", 45,50,45,115,55,95,Type::Ghost, Type::Poison, LEVITATE)},
+    {RIOLU, PokeInfo("Riolu", 40,70,40,35,40,60,Type::Fighting, Type::None, STEADFAST, INNER_FOCUS)},
+    {INFERNAPE, PokeInfo("Infernape", 76,104,71,104,71,108,Type::Fire,Type::Fighting,BLAZE)},
 };
 
 
@@ -156,6 +167,9 @@ void Pokemon::sendOut() {
 
     bVal.movePrevByBattler = Empty;
     bVal.moveHit = Empty;
+
+    bVal.turnsProtected = 0;
+    bVal.isProtected = false;
 }
 void Pokemon::setBHp(int hp) {
     bVal.bHp = hp;
@@ -282,13 +296,116 @@ PokeClient getPlayerHippoClient() {
     togetic.calcStats(); // recalc stats after setting evs
     vapor.setEvs(252, 0, 0, 0, 0, 252);
     vapor.calcStats();
-    // monferno.bVal.condition |= MON_CONDITION_PARALYSIS;
     p1.battler = 0;
     p1.aiControl = false;
     p1.team[0] = togetic;
     p1.team[1] = vapor;
     p1.name = "Player";
     return p1;
+}
+
+PokeClient getPlayerSaturnClient() {
+    PokeClient p1;
+    Move moveset1[4] = {Substitute, Surf, Substitute, Substitute};
+    Move moveset2[4] = {Earthquake, Earthquake, Earthquake, Earthquake};
+    Pokemon vapor = Pokemon(40, jolly, 0, VAPOREON, moveset1);
+    Pokemon hippo = Pokemon(40, lonely, 0, HIPPOWDON, moveset2);
+    hippo.setEvs(0, 28, 12, 0, 44, 24);
+    hippo.calcStats();
+    hippo.bVal.item = ITEM_PECHA_BERRY;
+    vapor.setEvs(252, 0, 0, 0, 0, 252);
+    vapor.calcStats();
+    vapor.bVal.item = ITEM_NATURE_BERRY;
+
+    p1.battler = 0;
+    p1.aiControl = false;
+    p1.team[0] = vapor;
+    p1.name = "Player";
+    return p1;
+}
+
+PokeClient getAISaturnClient() {
+    PokeClient p2;
+    Move moveset[4] = {AirCutter, Bite, Toxic, Supersonic};
+    Move moveset1[4] = {PoisonJab, Revenge, MudBomb, FaintAttack};
+
+    Pokemon bat = Pokemon(38, modest, 24, GOLBAT, moveset);
+    Pokemon toad = Pokemon(40, adamant, 24, TOXICROAK, moveset1);
+    p2.aiControl = true;
+    p2.aiLevel = 7;
+    p2.battler = 0;
+    // p2.team[0] = bat;
+    p2.team[0] = bat;
+    p2.name = "Saturn";
+    return p2;
+}
+
+PokeClient getAIVolknerClient() {
+    PokeClient p2;
+    Move moveset[4] = {ThunderWave, ChargeBeam, IronTail, QuickAttack};
+    Move moveset2[4] = {ChargeBeam, FocusBlast, SignalBeam, QuickAttack};
+    Move moveset3[4] = {IceFang, ThunderFang, Crunch, FireFang};
+    Move moveset4[4] = {ThunderPunch, FirePunch, QuickAttack, GigaImpact};
+    Pokemon jolteon = Pokemon(46, relaxed, 30, JOLTEON, moveset);
+    Pokemon raichu = Pokemon(46, gentle, 30, RAICHU, moveset2);
+    Pokemon luxray = Pokemon(48, lax, 30, LUXRAY, moveset3);
+    Pokemon electivire = Pokemon(50, impish, 0, ELECTIVIRE, moveset4);
+    electivire.hpIv = 4;
+    electivire.atkIv = 3;
+    electivire.defIv = 29;
+    electivire.spAtkIv = 18;
+    electivire.spDefIv = 15;
+    electivire.spdIv = 19; // electivire has a mistake and has its power set to 2500 instead of 250
+    electivire.calcStats(); 
+    electivire.bVal.item = ITEM_SITRUS_BERRY;
+    p2.useItems[0] = ITEM_HYPER_POTION;
+    p2.useItems[1] = ITEM_FULL_RESTORE;
+    p2.numUseItems = 2;
+    p2.name = "Volkner";
+    p2.team[0] = jolteon;
+    p2.team[1] = raichu;
+    p2.team[2] = luxray;
+    p2.team[3] = electivire;
+    p2.aiLevel = 7;
+    p2.battler = 0;
+    p2.aiControl = true;
+    return p2;
+}
+
+PokeClient getPlayerVolknerClient() {
+    PokeClient p1;
+    Move hippoMoveset[4] = {Earthquake, Yawn, Protect, Earthquake};
+    Move vaporMoveset[4] = {Protect, Substitute, Substitute, Substitute};
+    Move infernapeMoveset[4] = {Protect, Protect, Protect, Protect};
+    Move rioluMoveset[4] = {DoubleTeam, Protect, Protect, Protect};
+    Move roseradeMoveset[4] = {Protect, ToxicSpikes, Protect, Protect};
+    Move haunterMoveset[4] = {Protect, SuckerPunch, Protect, Protect};
+
+    Pokemon vapor = Pokemon(46, lonely, 0, VAPOREON, vaporMoveset);
+    vapor.setEvs(252, 0, 0, 0, 0, 252);
+    vapor.calcStats();
+    Pokemon hippo = Pokemon(47, rash, 0, HIPPOWDON, hippoMoveset);
+    hippo.setEvs(0, 46, 200, 0, 44, 60);
+    hippo.calcStats();
+    Pokemon haunter = Pokemon(44, lonely, 0, HAUNTER, haunterMoveset);
+    Pokemon infernape = Pokemon(47, timid, 0, INFERNAPE, infernapeMoveset);
+    Pokemon riolu = Pokemon(1, hardy, 0, RIOLU, rioluMoveset);
+    Pokemon roserade = Pokemon(44, lonely, 0, ROSERADE, roseradeMoveset);
+    roserade.setEvs(19, 0, 100, 0, 0, 0);
+    roserade.calcStats();
+    riolu.bVal.item = ITEM_STICKY_BARB;
+    hippo.bVal.item = ITEM_RAWST_BERRY;
+    p1.name = "Player";
+    p1.team[0] = hippo;
+    p1.team[1] = vapor;
+    p1.team[2] = roserade;
+    p1.team[3] = haunter;
+    p1.team[4] = riolu;
+    p1.team[5] = infernape;
+    p1.battler = 0;
+    p1.aiControl = false;
+    return p1;
+
 }
 BattleContext setupJupiterFight(unsigned long startingSeed) {
     Move moveset1[4] = {Tackle, FlameWheel, Taunt, Tackle};	
@@ -327,8 +444,8 @@ BattleContext setupJupiterFight(unsigned long startingSeed) {
     return bc;
 }
 BattleContext setupVarFight(unsigned long startingSeed) {
-    PokeClient p1 = getPlayerHippoClient();
-    PokeClient p2 = getHippopotasClient();
+    PokeClient p1 = getPlayerVolknerClient();
+    PokeClient p2 = getAIVolknerClient();
     p1.pokeSwitch(p1.battler);
     p2.pokeSwitch(p2.battler);
     // p1.team[p1.battler].bVal.evaStg = 12;
@@ -343,33 +460,6 @@ BattleContext setupVarFight(unsigned long startingSeed) {
     bc.weatherTurns = 0;
     bc.moveWasSuccessful = false;
     bc.turnNumber = 0;
-
+    bc.switchCommandIndex = 0;
     return bc;
 }
-// int main() {
-//     BattleContext bc = setupJupiterFight(6565656);
-//     bc.attacker.command = COMMAND_MOVE_SLOT_2;
-//     bc.defender.command = COMMAND_MOVE_SLOT_1;
-
-//     // bc.attacker = monferno;
-//     // bc.defender = monferno2;
-//     // bc.battleRng = {5,5};
-//     bool shouldContinue = true;
-//     int i = 0;
-//     while(shouldContinue) {
-//         shouldContinue = doTurn(&bc);
-//         i++;
-//         if(i > 25) {
-//             shouldContinue = false;
-//         }
-//     }
-//     int burned = bc.defender.team[bc.defender.battler].bVal.condition & MON_CONDITION_POISON;
-//     std::cout << "Battler Defender: " << bc.defender.team[bc.defender.battler].info.name << " Current HP: " << bc.defender.team[bc.defender.battler].bVal.bHp << " Status: " << bc.defender.team[bc.defender.battler].bVal.condition << std::endl;
-//     std::cout << "Battler Attacker: " << bc.attacker.team[bc.attacker.battler].info.name << " Current HP: " << bc.attacker.team[bc.attacker.battler].bVal.bHp << " Status: " << bc.attacker.team[bc.attacker.battler].bVal.condition << std::endl;
-//     std::cout << "Ending Seed: " << bc.battleRng.seed << std::endl;
-//     if(bc.attacker.team[bc.attacker.battler].bVal.condition & MON_CONDITION_BURN) {
-//         std::cout << "burned" << std::endl;
-//     }
-//     // std::cout << bc.defender.team[bc->defender.battler].bVal.bHp << std::endl;
-//     return 0;
-// };

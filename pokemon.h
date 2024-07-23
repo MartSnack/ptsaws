@@ -16,6 +16,13 @@
 #define ITEM_PERSIM_BERRY 5
 #define ITEM_BOOST_DARK 6
 #define ITEM_SUPER_POTION 7
+#define ITEM_NATURE_BERRY 8 // they're all the same anyway, and we won't ever get confused by one using memory mail
+#define ITEM_BOOST_WATER 9
+#define ITEM_ASPEAR_BERRY 10
+#define ITEM_RAWST_BERRY 11
+#define ITEM_HYPER_POTION 12
+#define ITEM_FULL_RESTORE 13
+#define ITEM_STICKY_BARB 14
 
 // int calcDamage(Pokemon attacker, Pokemon defender, Move move, int crit = 1, int randomRoll = 100);
 
@@ -47,14 +54,23 @@ enum AbilityId {
     KEEN_EYE,
     INNER_FOCUS,
     INTIMIDATE,
-    SIMPLE,
+    SIMPLE, 
     RUN_AWAY,
     HYPER_CUTTER,
-    OWN_TEMPO,
-    ADAPTABILITY,
+    OWN_TEMPO, // niy
+    ADAPTABILITY, // niy
     SAND_STREAM,
-    HUSTLE, // ni
-    SERENCE_GRACE, // ni
+    HUSTLE, // niy
+    SERENCE_GRACE, // niy
+    ANTICIPATION, // niy
+    DRY_SKIN, // niy
+    STATIC, //niy
+    RIVALRY, //niy
+    NATURAL_CURE,  //niy
+    POISON_POINT, // niy
+    STEADFAST, //niy
+    LIMBER, //niy
+    TRUANT, // niy
 };
 // note that we really only care what stat nature is reducing
 // since we can just extrapolate that our bonus stat is whatever
@@ -98,6 +114,19 @@ enum Mons {
     HIPPOPOTAS,
     TOGETIC, 
     VAPOREON,
+    GOLBAT,
+    TOXICROAK,
+    HIPPOWDON,
+    JOLTEON, 
+    ELECTIVIRE,
+    RAICHU,
+    LUXRAY,
+    TOGEKISS,
+    ROSERADE,
+    HAUNTER,
+    RIOLU,
+    INFERNAPE,
+
 };
 
 
@@ -124,6 +153,9 @@ struct BattleVal {
     int critStg;
 
     int turnsTaunted;
+
+    int turnsProtected;
+    bool isProtected;
 
     bool abilityKnownToAi;
 
