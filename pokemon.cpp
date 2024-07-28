@@ -84,6 +84,30 @@ std::map<Mons, PokeInfo> pokemap = {
     {HAUNTER, PokeInfo("Haunter", 45,50,45,115,55,95,Type::Ghost, Type::Poison, LEVITATE)},
     {RIOLU, PokeInfo("Riolu", 40,70,40,35,40,60,Type::Fighting, Type::None, STEADFAST, INNER_FOCUS)},
     {INFERNAPE, PokeInfo("Infernape", 76,104,71,104,71,108,Type::Fire,Type::Fighting,BLAZE)},
+    {YANMEGA, PokeInfo("Yanmega", 86,76,86,116,56,95,Type::Bug,Type::Flying,SPEED_BOOST, TINTED_LENS)},
+    {SCIZOR, PokeInfo("Scizor", 70,130,100,55,80,65,Type::Bug,Type::Steel,SWARM, TECHNICIAN)},
+    {DRAPION, PokeInfo("Drapion", 70,90,110,60,75,95,Type::Poison,Type::Dark,BATTLE_ARMOR, SNIPER)},
+    {HERACROSS, PokeInfo("Heracross", 80,125,75,40,95,85,Type::Bug,Type::Fighting,SWARM, GUTS)},
+    {VESPIQUEN, PokeInfo("Vespiquen", 70,80,102,80,102,40,Type::Bug,Type::Flying,PRESSURE)},
+    {WHISCASH, PokeInfo("Whiscash", 110,78,73,76,71,60,Type::Water,Type::Ground,OBLIVIOUS, ANTICIPATION)},
+    {GOLEM, PokeInfo("Golem", 80,110,130,55,65,45,Type::Rock,Type::Ground,ROCK_HEAD, STURDY)},
+{GLISCOR, PokeInfo("Gliscor", 75,95,125,45,75,95,Type::Ground,Type::Flying,HYPER_CUTTER, SAND_VEIL)},
+{RHYPERIOR, PokeInfo("Rhyperior", 115,140,130,55,55,40,Type::Ground,Type::Rock,LIGHTNING_ROD, SOLID_ROCK)},
+{HOUNDOOM, PokeInfo("Houndoom", 75,90,50,110,80,95,Type::Dark,Type::Fire,EARLY_BIRD, FLASH_FIRE)},
+{RAPIDASH, PokeInfo("Rapidash", 65,100,70,80,80,105,Type::Fire,Type::Fire,RUN_AWAY, FLASH_FIRE)},
+{MAGMORTAR, PokeInfo("Magmortar", 75,95,67,125,95,83,Type::Fire,Type::Fire,FLAME_BODY)},
+{FLAREON, PokeInfo("Flareon", 65,130,60,95,110,65,Type::Fire,Type::Fire,FLASH_FIRE, FLASH_FIRE)},
+{MR_MIME, PokeInfo("Mr. Mime", 40,45,65,100,120,90,Type::Psychic,Type::Psychic,SOUNDPROOF, FILTER)},
+{ESPEON, PokeInfo("Espeon", 65,65,60,130,95,110,Type::Psychic,Type::Psychic,SYNCHRONIZE, SYNCHRONIZE)},
+{ALAKAZAM, PokeInfo("Alakazam", 55,50,45,135,85,120,Type::Psychic,Type::Psychic,SYNCHRONIZE, INNER_FOCUS)},
+{BRONZONG, PokeInfo("Bronzong", 67,89,116,79,116,33,Type::Steel,Type::Psychic,LEVITATE, HEATPROOF)},
+{GALLADE, PokeInfo("Gallade", 68,125,65,65,115,80,Type::Psychic,Type::Fighting,STEADFAST, STEADFAST)},
+{SPIRITOMB, PokeInfo("Spiritomb", 50,92,108,92,108,35,Type::Ghost,Type::Dark,PRESSURE)},
+{LUCARIO, PokeInfo("Lucario", 70,110,70,115,70,90,Type::Fighting,Type::Steel,STEADFAST, INNER_FOCUS)},
+{MILOTIC, PokeInfo("Milotic", 95,60,79,100,125,81,Type::Water,Type::Water,MARVEL_SCALE)},
+{GARCHOMP, PokeInfo("Garchomp", 108,130,95,80,85,102,Type::Dragon,Type::Ground,SAND_VEIL)},
+{AZELF, PokeInfo("Azelf", 75,125,70,125,70,115,Type::Psychic,Type::None,LEVITATE)},
+
 };
 
 
@@ -167,7 +191,9 @@ void Pokemon::sendOut() {
 
     bVal.movePrevByBattler = Empty;
     bVal.moveHit = Empty;
-
+    bVal.isCharging = false;
+    bVal.encoredMove = Empty;
+    bVal.turnsEncored = 0;
     bVal.turnsProtected = 0;
     bVal.isProtected = false;
 }
@@ -381,14 +407,16 @@ PokeClient getPlayerVolknerClient() {
     Move roseradeMoveset[4] = {Protect, ToxicSpikes, Protect, Protect};
     Move haunterMoveset[4] = {Protect, SuckerPunch, Protect, Protect};
 
-    Pokemon vapor = Pokemon(46, lonely, 0, VAPOREON, vaporMoveset);
+    Pokemon vapor = Pokemon(47, lonely, 0, VAPOREON, vaporMoveset);
     vapor.setEvs(252, 0, 0, 0, 0, 252);
     vapor.calcStats();
-    Pokemon hippo = Pokemon(47, rash, 0, HIPPOWDON, hippoMoveset);
-    hippo.setEvs(0, 46, 200, 0, 44, 60);
+    Pokemon hippo = Pokemon(47, modest, 0, HIPPOWDON, hippoMoveset);
+    hippo.setEvs(0, 56, 200, 0, 44, 60);
     hippo.calcStats();
     Pokemon haunter = Pokemon(44, lonely, 0, HAUNTER, haunterMoveset);
-    Pokemon infernape = Pokemon(47, timid, 0, INFERNAPE, infernapeMoveset);
+    Pokemon infernape = Pokemon(47, lonely, 0, INFERNAPE, infernapeMoveset);
+    infernape.setEvs(60, 0, 12, 0, 0, 0);
+    infernape.calcStats();
     Pokemon riolu = Pokemon(1, hardy, 0, RIOLU, rioluMoveset);
     Pokemon roserade = Pokemon(44, lonely, 0, ROSERADE, roseradeMoveset);
     roserade.setEvs(19, 0, 100, 0, 0, 0);
@@ -401,6 +429,78 @@ PokeClient getPlayerVolknerClient() {
     p1.team[2] = roserade;
     p1.team[3] = haunter;
     p1.team[4] = riolu;
+    p1.team[5] = infernape;
+    p1.battler = 0;
+    p1.aiControl = false;
+    return p1;
+
+}
+
+PokeClient getAIAaronClient() {
+    PokeClient p2;
+    Move moveset[4] = {AirSlash, BugBuzz, UTurn, DoubleTeam};
+    Move moveset2[4] = {IronHead, XScissor, NightSlash, QuickAttack};
+    Move moveset3[4] = {AttackOrder, DefendOrder, HealOrder, PowerGem};
+    Move moveset4[4] = {Megahorn, CloseCombat, NightSlash, StoneEdge};
+    Move moveset5[4] = {XScissor, CrossPoison, IceFang, AerialAce};
+    Pokemon yanmega = Pokemon(49, rash, 30, YANMEGA, moveset);
+    Pokemon scizor = Pokemon(49, gentle, 30, SCIZOR, moveset2);
+    Pokemon vespiquen = Pokemon(50, careful, 30, VESPIQUEN, moveset3);
+    Pokemon heracross = Pokemon(51, naughty, 30, HERACROSS, moveset4);
+    Pokemon drapion = Pokemon(53, jolly, 30, DRAPION, moveset5);
+    drapion.bVal.item = ITEM_SITRUS_BERRY;
+    p2.useItems[0] = ITEM_FULL_RESTORE;
+    p2.useItems[1] = ITEM_FULL_RESTORE;
+    p2.numUseItems = 2;
+    p2.name = "Aaron";
+    p2.team[0] = yanmega;
+    p2.team[1] = scizor;
+    p2.team[2] = vespiquen;
+    p2.team[3] = heracross;
+    p2.team[4] = drapion;
+    p2.aiLevel = 7;
+    p2.battler = 0;
+    p2.aiControl = true;
+    return p2;
+}
+
+PokeClient getPlayerAaronClient() {
+    PokeClient p1;
+    Move hippoMoveset[4] = {Earthquake, Yawn, Protect, StealthRock};
+    Move vaporMoveset[4] = {Protect, Substitute, Substitute, Substitute};
+    Move infernapeMoveset[4] = {Flamethrower, Protect, Protect, Protect};
+    Move togekissMoveset[4] = {Encore, Protect, Protect, Protect};
+    Move azelfMoveset[4] = {Thunderbolt, PsychicMove, Protect, Protect};
+    Move haunterMoveset[4] = {TrickRoom, SuckerPunch, Protect, Protect};
+
+    Pokemon vapor = Pokemon(51, lonely, 0, VAPOREON, vaporMoveset);
+    vapor.setEvs(252, 0, 0, 0, 0, 252);
+    vapor.calcStats();
+    Pokemon togekiss = Pokemon(51, lonely, 0, TOGEKISS, togekissMoveset);
+    togekiss.setEvs(0, 0, 100, 0, 0, 100);
+    togekiss.calcStats();
+    Pokemon hippo = Pokemon(51, rash, 0, HIPPOWDON, hippoMoveset);
+    hippo.setEvs(0, 56, 200, 0, 44, 60);
+    hippo.calcStats();
+    Pokemon haunter = Pokemon(51, lonely, 0, HAUNTER, haunterMoveset);
+    Pokemon infernape = Pokemon(51, timid, 0, INFERNAPE, infernapeMoveset);
+    infernape.setEvs(60, 0, 12, 0, 0, 0);
+    infernape.calcStats();
+    Pokemon azelf = Pokemon(51, relaxed, 0, AZELF, azelfMoveset);
+    azelf.setEvs(0, 0, 0, 216, 0, 100);
+    azelf.calcStats();
+    // hippo.bVal.item = ITEM_ASPEAR_BERRY;
+    togekiss.bVal.item = ITEM_STICKY_BARB;
+    azelf.bVal.item = ITEM_BOOST_ELECTRIC;
+    hippo.bVal.item = ITEM_BOOST_GROUND;
+    azelf.bVal.bHp = 14;
+    vapor.bVal.bHp = 113;
+    p1.name = "Player";
+    p1.team[0] = azelf;
+    p1.team[1] = vapor;
+    p1.team[2] = hippo;
+    p1.team[3] = haunter;
+    p1.team[4] = togekiss;
     p1.team[5] = infernape;
     p1.battler = 0;
     p1.aiControl = false;
@@ -444,8 +544,8 @@ BattleContext setupJupiterFight(unsigned long startingSeed) {
     return bc;
 }
 BattleContext setupVarFight(unsigned long startingSeed) {
-    PokeClient p1 = getPlayerVolknerClient();
-    PokeClient p2 = getAIVolknerClient();
+    PokeClient p1 = getPlayerAaronClient();
+    PokeClient p2 = getAIAaronClient();
     p1.pokeSwitch(p1.battler);
     p2.pokeSwitch(p2.battler);
     // p1.team[p1.battler].bVal.evaStg = 12;

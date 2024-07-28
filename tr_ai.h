@@ -72,6 +72,7 @@ struct AiContext {
     PokeClient target;
 };
 void ailog(std::string text);
+int AI_PostKOSwitch(BattleContext *bc);
 
 bool AI_HasAbsorbAbilityInParty(BattleContext *bc, AiContext *ac);
 bool AI_HasSuperEffectiveMove(BattleContext *bc, AiContext *ac, bool flag);
@@ -88,7 +89,7 @@ int AI_CompPowerCalc(BattleContext *bc, AiContext *ac, int *damage);
 static bool AI_DoesMoveKo(BattleContext *bc, AiContext *ac);
 static void AI_CheckTypeAdvantage(BattleContext *bc, AiContext *ac);
 static void AI_CompPower(BattleContext *bc, AiContext *ac);
-void processAI(BattleContext *bc);
+int processAI(BattleContext *bc);
 static void AI_INCDEC(AiContext *ac, int val);
 bool AI_DEC1(AiContext *ac);
 bool AI_DEC10(AiContext *ac);
@@ -109,6 +110,13 @@ bool AI_BasicDefenseDown(BattleContext *bc, AiContext *ac);
 bool AI_BasicAccuracyDown(BattleContext *bc, AiContext *ac);
 bool AI_BasicClearBody(BattleContext *bc, AiContext *ac);
 bool AI_BasicRiskyDamage(BattleContext *bc, AiContext *ac);
+bool AI_BasicCalmMind(BattleContext *bc, AiContext *ac);
+bool AI_BasicCosmicPower(BattleContext *bc, AiContext *ac);
+bool AI_BasicRecover(BattleContext *bc, AiContext *ac);
+bool AI_BasicSandstorm(BattleContext *bc, AiContext *ac);
+bool AI_BasicSunnyDay(BattleContext *bc, AiContext *ac);
+bool AI_BasicBurn(BattleContext *bc, AiContext *ac);
+
 bool AI_ExpertSeq(BattleContext *bc, AiContext *ac);
 bool AI_ExpertAccuracyDown(BattleContext *bc, AiContext *ac);
 bool AI_ExpertAccuracyDown_2(BattleContext *bc, AiContext *ac);
@@ -177,5 +185,28 @@ bool AI_BasicParalyze(BattleContext *bc, AiContext *ac);
 bool AI_ExpertParalyze(BattleContext *bc, AiContext *ac);
 
 bool AI_ExpertRechargeTurn(BattleContext *bc, AiContext *ac);
+
+bool AI_ExpertSpDefenseUp(BattleContext *bc, AiContext *ac);
+
+bool AI_ExpertInvulnTurn(BattleContext *bc, AiContext *ac);
+
+bool AI_ExpertCloseCombat(BattleContext *bc, AiContext *ac);
+
+bool AI_ExpertDrainMove(BattleContext *bc, AiContext *ac);
+
+bool AI_ExpertMirrorCoat(BattleContext *bc, AiContext *ac);
+bool AI_ExpertMirrorCoat_Minus1(BattleContext *bc, AiContext *ac);
+
+bool AI_ExpertGyroBall(BattleContext *bc, AiContext *ac);
+
+bool AI_ExpertRecovery(BattleContext *bc, AiContext *ac);
+
+bool AI_ExpertOverheat(BattleContext *bc, AiContext *ac);
+
+bool AI_ExpertChargeTurnNoInvuln(BattleContext *bc, AiContext *ac);
+
+bool AI_ExpertSunnyDay(BattleContext *bc, AiContext *ac);
+
+bool AI_ExpertUTurn(BattleContext *bc, AiContext *ac);
 
 #endif /*TR_AI_H*/

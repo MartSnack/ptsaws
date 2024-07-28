@@ -117,8 +117,7 @@ unsigned long parseCommand(BattleContext *bc, PokeClient *pc, unsigned long comm
         } else if(com & COMMAND_SWITCH) {
 
                 // if we are attempting to switch, but the battler we want to send out is already out, branch. 
-                int nextBattler = log2(com & COMMAND_SWITCH);
-                nextBattler = nextBattler - COMMAND_SWITCH_OFFSET; // from 4-9 to 0-5
+                int nextBattler = getSwitchNum(com);
                 if(pc->battler == nextBattler) {
                     branched = true;
                     bc->branch++; 
@@ -467,51 +466,41 @@ int main(int argc, char* argv[]) {
         }
     }
     cList.defaultCommand = COMMAND_MOVE_SLOT_2;
-    // volkner commands
-    // Move hippoMoveset[4] = {Earthquake, Yawn, Protect, Earthquake};
-    // Move vaporMoveset[4] = {Protect, Substitute, Substitute, Substitute};
-    // Move infernapeMoveset[4] = {Protect, Protect, Protect, Protect};
-    // Move rioluMoveset[4] = {DoubleTeam, Protect, Protect, Protect};
-    // Move roseradeMoveset[4] = {Protect, ToxicSpikes, Protect, Protect};
-    // Move haunterMoveset[4] = {Protect, SuckerPunch, Protect, Protect};
-    // p1.team[0] = hippo;
+    // p1.team[0] = azelf;
     // p1.team[1] = vapor;
-    // p1.team[2] = roserade;
+    // p1.team[2] = hippo;
     // p1.team[3] = haunter;
-    // p1.team[4] = riolu;
+    // p1.team[4] = togekiss;
     // p1.team[5] = infernape;
-    cList.commands[0][0] = COMMAND_MOVE_SLOT_1 | COMMAND_SWITCH_5; // earthquake 
-    cList.commands[1][0] = COMMAND_MOVE_SLOT_1 | COMMAND_SWITCH_1; // die by quick attack, send in hippo
-    cList.commands[2][0] = COMMAND_MOVE_SLOT_3; // protect against focus blast
-    cList.commands[3][0] = COMMAND_SWITCH_4; // switch to haunter
-    cList.commands[4][0] = COMMAND_MOVE_SLOT_1; // use protect
-    cList.commands[5][0] = COMMAND_SWITCH_3; // send in roserade
-    cList.commands[6][0] = COMMAND_MOVE_SLOT_2; // use toxic spikes
-    cList.commands[7][0] = COMMAND_MOVE_SLOT_1; // use protect
-    cList.commands[8][0] = COMMAND_SWITCH_4; // switch to haunter again
-    cList.commands[9][0] = COMMAND_SWITCH_1; // back to hippo
-    cList.commands[10][0] = COMMAND_SWITCH_4; // back to haunter
-    cList.commands[11][0] = COMMAND_MOVE_SLOT_2 | COMMAND_SWITCH_2; // use sucker punch, switch to vapor when raichu KOed
-    cList.commands[12][0] = COMMAND_MOVE_SLOT_1; // protect
-    cList.commands[13][0] = COMMAND_SWITCH_1; // to hippo
-    cList.commands[14][0] = COMMAND_MOVE_SLOT_3; // protect
-    cList.commands[15][0] = COMMAND_SWITCH_6; // send in infernape
-    cList.commands[16][0] = COMMAND_SWITCH_1; // back to hippo
-    cList.commands[17][0] = COMMAND_MOVE_SLOT_2; // yawn
-    cList.commands[18][0] = COMMAND_MOVE_SLOT_3; // protect
-    cList.commands[19][0] = COMMAND_MOVE_SLOT_1 | COMMAND_SWITCH_2; // earthquake, switch to vapor if we KOed
-    cList.commands[20][0] = COMMAND_SWITCH_2; // switch to vapor, but we might branch here, and if we KO, back to hippo
-    cList.commands[21][0] = COMMAND_SWITCH_1; // might branch, back to hippo
-    cList.commands[22][0] = COMMAND_MOVE_SLOT_3; // protect
-    cList.commands[23][0] = COMMAND_MOVE_SLOT_1; // earthquake. In this branch, electivire has only suffered 1 turn of poison/sandstorm, but we still deal enough damage
+    // Move hippoMoveset[4] = {Earthquake, Yawn, Protect, StealthRock};
+    // Move vaporMoveset[4] = {Protect, Substitute, Substitute, Substitute};
+    // Move infernapeMoveset[4] = {Flamethrower, Protect, Protect, Protect};
+    // Move togekissMoveset[4] = {Encore, Protect, Protect, Protect};
+    // Move azelfMoveset[4] = {Thunderbolt, PsychicMove, Protect, Protect};
+    // Move haunterMoveset[4] = {TrickRoom, SuckerPunch, Protect, Protect};
+    cList.commands[0][0] = COMMAND_MOVE_SLOT_1; // azelf thunderbolts 
+    cList.commands[1][0] = COMMAND_SWITCH | POKE_SLOT_5; // switch to togekiss
+    cList.commands[2][0] = COMMAND_MOVE_SLOT_1; // encore
+    cList.commands[3][0] = COMMAND_SWITCH | POKE_SLOT_3; // send out hippo
+    cList.commands[4][0] = COMMAND_MOVE_SLOT_4; // stealth rock
+    cList.commands[5][0] = COMMAND_MOVE_SLOT_2; // yawn
+    cList.commands[6][0] = COMMAND_MOVE_SLOT_3; // protect
+    cList.commands[7][0] = COMMAND_SWITCH | POKE_SLOT_2; // send out vapor
+    cList.commands[8][0] = COMMAND_MOVE_SLOT_2; // substitute
+    cList.commands[9][0] = COMMAND_USE_ITEM_FULL_RESTORE | POKE_SLOT_5; // heal toge
+    cList.commands[10][0] = COMMAND_SWITCH | POKE_SLOT_5; // send out toge
+    cList.commands[11][0] = COMMAND_MOVE_SLOT_1; // encore
+    cList.commands[12][0] = COMMAND_SWITCH | POKE_SLOT_4; // send out haunter
+    cList.commands[13][0] = COMMAND_USE_ITEM_FULL_RESTORE | POKE_SLOT_3; // heal hippo
+    cList.commands[14][0] = COMMAND_MOVE_SLOT_1; // trick room
+    cList.commands[15][0] = COMMAND_SWITCH | POKE_SLOT_6; // infernape out
+    cList.commands[16][0] = COMMAND_MOVE_SLOT_2 | COMMAND_SWITCH | POKE_SLOT_3; // protect and then send out hippo
+    cList.commands[17][0] = COMMAND_MOVE_SLOT_3; // protect
+    cList.commands[18][0] = COMMAND_MOVE_SLOT_1 | COMMAND_SWITCH | POKE_SLOT_1; // earthquake KOs, send in azelf
+    cList.commands[19][0] = COMMAND_MOVE_SLOT_2 | COMMAND_SWITCH | POKE_SLOT_6;
+    cList.commands[20][0] = COMMAND_MOVE_SLOT_1;
 
-    cList.commands[21][2] = COMMAND_MOVE_SLOT_3; // protect
-    cList.commands[22][2] = COMMAND_MOVE_SLOT_1; // earthquake should KO;
 
-
-    cList.commands[20][1] = COMMAND_SWITCH_1; // switch to hippo on the branch
-    cList.commands[21][1] = COMMAND_MOVE_SLOT_3; // use protect on first branch
-    cList.commands[22][1] = COMMAND_MOVE_SLOT_1; // earthquake KOs electivire
     std::cout << "Loaded Commands" << std::endl;
     // cList.commands[1][0] = COMMAND_SWITCH_1;
     // cList.commands[2][0] = COMMAND_SWITCH_2;

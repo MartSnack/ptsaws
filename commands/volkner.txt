@@ -1,0 +1,32 @@
+    cList.commands[0][0] = COMMAND_MOVE_SLOT_1 | COMMAND_SWITCH_5; // earthquake 
+    cList.commands[1][0] = COMMAND_MOVE_SLOT_1 | COMMAND_SWITCH_1; // die by quick attack, send in hippo
+    cList.commands[2][0] = COMMAND_MOVE_SLOT_3; // protect against focus blast
+    cList.commands[3][0] = COMMAND_SWITCH_4; // switch to haunter
+    cList.commands[4][0] = COMMAND_MOVE_SLOT_1; // use protect
+    cList.commands[5][0] = COMMAND_SWITCH_3; // send in roserade
+    cList.commands[6][0] = COMMAND_MOVE_SLOT_2; // use toxic spikes
+    cList.commands[7][0] = COMMAND_MOVE_SLOT_1; // use protect
+    cList.commands[8][0] = COMMAND_SWITCH_4; // switch to haunter again
+    cList.commands[9][0] = COMMAND_SWITCH_1; // back to hippo
+    cList.commands[10][0] = COMMAND_SWITCH_4; // back to haunter
+    cList.commands[11][0] = COMMAND_MOVE_SLOT_2 | COMMAND_SWITCH_2; // use sucker punch, switch to vapor when raichu KOed
+    cList.commands[12][0] = COMMAND_SWITCH_1; // to hippo
+    cList.commands[13][0] = COMMAND_MOVE_SLOT_3; // protect
+    cList.commands[14][0] = COMMAND_SWITCH_6; // send in infernape
+    cList.commands[15][0] = COMMAND_SWITCH_1; // back to hippo
+    cList.commands[16][0] = COMMAND_MOVE_SLOT_3; // protect
+    cList.commands[17][0] = COMMAND_MOVE_SLOT_2; // yawn
+    cList.commands[18][0] = COMMAND_MOVE_SLOT_3; // protect
+    cList.commands[19][0] = COMMAND_MOVE_SLOT_1 | COMMAND_SWITCH_2; // earthquake, switch to vapor if we KOed
+    cList.commands[20][0] = COMMAND_SWITCH_2; // switch to vapor, but we might branch here, and if we KO, back to hippo
+    cList.commands[21][0] = COMMAND_SWITCH_1; // might branch, back to hippo
+    cList.commands[22][0] = COMMAND_MOVE_SLOT_3; // protect
+    cList.commands[23][0] = COMMAND_MOVE_SLOT_1; // earthquake. In this branch, electivire has only suffered 1 turn of poison/sandstorm, but we still deal enough damage
+
+    cList.commands[21][2] = COMMAND_MOVE_SLOT_3; // protect
+    cList.commands[22][2] = COMMAND_MOVE_SLOT_1; // earthquake should KO;
+
+
+    cList.commands[20][1] = COMMAND_SWITCH_1; // switch to hippo on the branch
+    cList.commands[21][1] = COMMAND_MOVE_SLOT_3; // use protect on first branch
+    cList.commands[22][1] = COMMAND_MOVE_SLOT_1; // earthquake KOs electivire

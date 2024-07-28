@@ -14,19 +14,20 @@
                         | COMMAND_MOVE_SLOT_3 \
                         | COMMAND_MOVE_SLOT_4)
 #define COMMAND_SWITCH_OFFSET 4
-#define COMMAND_SWITCH_1 1 << 4
-#define COMMAND_SWITCH_2 1 << 5
-#define COMMAND_SWITCH_3 1 << 6
-#define COMMAND_SWITCH_4 1 << 7
-#define COMMAND_SWITCH_5 1 << 8
-#define COMMAND_SWITCH_6 1 << 9
-#define COMMAND_SWITCH ( COMMAND_SWITCH_1 \
-                       | COMMAND_SWITCH_2 \
-                       | COMMAND_SWITCH_3 \
-                       | COMMAND_SWITCH_4 \
-                       | COMMAND_SWITCH_5 \
-                       | COMMAND_SWITCH_6 \
-                       )
+#define POKE_SLOT_1 1 << 4
+#define POKE_SLOT_2 1 << 5
+#define POKE_SLOT_3 1 << 6
+#define POKE_SLOT_4 1 << 7
+#define POKE_SLOT_5 1 << 8
+#define POKE_SLOT_6 1 << 9
+
+#define POKE_SLOTS ( POKE_SLOT_1 \
+    | POKE_SLOT_2 \
+    | POKE_SLOT_3 \
+    | POKE_SLOT_4 \
+    | POKE_SLOT_5 \
+    | POKE_SLOT_6 )
+
 #define COMMAND_USE_ITEM_SUPER_POTION 1 << 10
 #define COMMAND_USE_ITEM_GUARD_SPEC 1 << 11
 #define COMMAND_USE_ITEM_HYPER_POTION 1 << 12
@@ -45,16 +46,20 @@
                          | COMMAND_USE_ITEM_X_SPEED \
                          | COMMAND_USE_ITEM_ANTIDOTE \
                          | COMMAND_USE_ITEM_FULL_RESTORE)
+#define COMMAND_SWITCH 1 << 19
+
+
+#define COMMAND_BRANCH_INC 1 << 20
+#define COMMAND_BRANCH_DEC 1 << 21
+#define COMMAND_BRANCH_IF_KO 1 << 22
 // option selects
 #define COMMAND_USE_GATEAU_OR_BITE 1 << 27
 #define COMMAND_USE_HYPER_OR_BITE 1 << 28
 
-#define COMMAND_BRANCH_INC 1 << 20
-#define COMMAND_BRANCH_DEC 1 << 21
-
 #define TRIGGER_INTIMIDATE 1<<0
 #define TRIGGER_SAND_STREAM 1<<1
 #define TRIGGER_TOXIC_SPIKES 1<<2
+#define TRIGGER_STEALTH_ROCK 1<<3
 
 
 #define MOVE_STATUS_MISSED              (1 << 0)
@@ -65,14 +70,17 @@
 
 unsigned short advanceSeed(BattleContext *bc, std::string blurb = "none");
 bool useMove(Move move, BattleContext *bc);
-int calcDamage(BattleContext *bc, Move move, int crit = 1, int randomRoll = 0, bool hurtSelf = false);
+int calcDamage(BattleContext *bc, Move move, int crit = 1, int randomRoll = 0, bool hurtSelf = false, bool defenderAttacking = false);
 int dealDamage(Pokemon *p,  int damage, bool directSource = true);
-int getTypeMultiplier(BattleContext *bc, Move move, int damage, int *moveStatus);
 bool determineOrder(BattleContext *bc);
 bool doTurn(BattleContext *bc);
 bool checkStatusDisruption(BattleContext *bc, Move move);
 void updateMoveBuffers(BattleContext *bc, Move move);
 void updateFlagsWhenHit(BattleContext *bc, Move move);
+void heal(Pokemon *p, int amount);
+int calcTypeMultiplier(Type attack, Type defend1, Type defend2);
+int getSwitchNum(unsigned long command);
+
 enum class FieldCondition {
     NONE,
     MIST,
@@ -123,8 +131,6 @@ struct PokeClient {
 
 };
 struct BattleContext {
-
-
     RngSeed battleRng;
     PokeClient attacker;
     PokeClient defender;
@@ -135,6 +141,7 @@ struct BattleContext {
     int cDmg; // variable flat damage
     int cPwr; // variable power 
     int realDmg; // damage dealt by most recent move, used by moves that cause recoil or counter
+    int previousDmg; // damage dealt by the previously used move
     int turnNumber;
     int speedTieBreakers[4];
     bool terminate;
@@ -178,5 +185,6 @@ static const Fraction StatBonusByStage[] = {
 };
 
 int calcSpeed(PokeClient *pc);
+int getTypeMultiplier(PokeClient *attacker, PokeClient *defender, Move move, int damage, int *moveStatus);
 
 #endif /* BATTLE_H_ */

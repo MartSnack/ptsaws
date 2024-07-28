@@ -140,6 +140,16 @@ bool AI_IfMoveEffect(BattleContext *bc, AiContext *ac, int moveEffect, bool targ
     }
     return pc.team[pc.battler].bVal.moveEffectsMask & moveEffect;
 }
+
+bool AI_IfHeldItem(BattleContext *bc, AiContext *ac, int item, bool target = false) {
+    PokeClient pc;
+    if(target) {
+        pc = ac->target;
+    } else {
+        pc = ac->self;
+    }
+    return pc.team[pc.battler].bVal.item == item;
+}
 // defaults to CHECK_ATTACK
 // check volatile conditions like confusion 
 bool AI_IfVolCondition(BattleContext *bc, AiContext *ac, int volCondition, bool target = false) {
@@ -227,13 +237,76 @@ int AI_CompPowerCalc(BattleContext *bc, AiContext *ac, int *damage) {
     }
     return maxDamage;
 }
+bool AI_CheckImmuneSandstorm(BattleContext *bc, AiContext *ac, bool target = false) {
+    PokeClient pc;
+    if(target) {
+        pc = ac->target;
+    } else {
+        pc = ac->self;
+    }
+    PokeInfo p = pc.team[pc.battler].info;
+    if(p.primaryType == Type::Ground || p.primaryType == Type::Rock || p.primaryType == Type::Steel) {
+        return true;
+    }
+    if(p.secondaryType == Type::Ground || p.secondaryType == Type::Rock || p.secondaryType == Type::Steel) {
+        return true;
+    }
+    return false;
+}
+bool AI_CheckImmuneHail(BattleContext *bc, AiContext *ac, bool target = false) {
+    PokeClient pc;
+    if(target) {
+        pc = ac->target;
+    } else {
+        pc = ac->self;
+    }
+    PokeInfo p = pc.team[pc.battler].info;
+    if(p.primaryType == Type::Ice) {
+        return true;
+    }
+    if(p.secondaryType == Type::Ice) {
+        return true;
+    }
+    return false;
+}
+bool AI_CheckSpecialType(BattleContext *bc, AiContext *ac, bool target = false) {
+    PokeClient pc;
+    if(target) {
+        pc = ac->target;
+    } else {
+        pc = ac->self;
+    }
+    PokeInfo p = pc.team[pc.battler].info;
+    if(p.primaryType == Type::Fire ||
+    p.primaryType == Type::Water ||
+    p.primaryType == Type::Grass ||
+    p.primaryType == Type::Electric ||
+    p.primaryType == Type::Psychic ||
+    p.primaryType == Type::Ice ||
+    p.primaryType == Type::Dragon ||
+    p.primaryType == Type::Dark) {
+        return true;
+    }
+    if(p.secondaryType == Type::Fire ||
+    p.secondaryType == Type::Water ||
+    p.secondaryType == Type::Grass ||
+    p.secondaryType == Type::Electric ||
+    p.secondaryType == Type::Psychic ||
+    p.secondaryType == Type::Ice ||
+    p.secondaryType == Type::Dragon ||
+    p.secondaryType == Type::Dark) {
+        return true;
+    }
+    return false;
+
+}
 // sets ac.currentTypeAdvantage to effectiveness value
 // makes an attack of base power 40 with current move's typing
 // returns a damage value, one of QUAD_EFFECTIVE, SUPER_EFFECTIVE, NORMAL_EFFECTIVE, NOT_EFFECTIVE, QUAD_NOT_EFFECTIVE, IMMUNE_EFFECTIVE
 static void AI_CheckTypeAdvantage(BattleContext *bc, AiContext *ac) {
     int damage = NORMAL_EFFECTIVE;
     int moveStatus = 0;
-    damage = getTypeMultiplier(bc, ac->self.team[ac->self.battler].moveset[ac->currentIndex], damage, &moveStatus);
+    damage = getTypeMultiplier(&bc->attacker, &bc->defender, ac->self.team[ac->self.battler].moveset[ac->currentIndex], damage, &moveStatus);
     if(damage == STAB_EFFECTIVE * 2) {
         damage = SUPER_EFFECTIVE;
     } else if(damage == STAB_EFFECTIVE * 4) {
@@ -382,7 +455,7 @@ bool AI_HasSuperEffectiveMove(BattleContext *bc, AiContext *ac, bool flag) {
         move = ac->self.team[ac->self.battler].moveset[i];
         if(move.id != MoveId::NO_MOVE) {
             moveStatus = 0;
-            getTypeMultiplier(bc, move, 40, &moveStatus);
+            getTypeMultiplier(&bc->attacker, &bc->defender, move, 40, &moveStatus);
 
             if(moveStatus & MOVE_STATUS_SUPER_EFFECTIVE) {
                 if(flag) {
@@ -455,7 +528,7 @@ int AI_SelectCommand(BattleContext *bc, AiContext *ac) {
     return 3;
 }
 // returns the selected command code to do 
-void processAI(BattleContext *bc) {
+int processAI(BattleContext *bc) {
     AiContext ac = {};
     int point[4];
 	int poswork[4];
@@ -496,6 +569,10 @@ void processAI(BattleContext *bc) {
     } else if(choice == 2) {
         bc->attacker.command = ac.self.command;
     } else {
+        if(ac.self.team[ac.self.battler].bVal.encoredMove.id != MoveId::NO_MOVE) {
+            bc->attacker.command = COMMAND_MOVE; // if we've picked the move command in general, encore goes ahead and chooses for us
+            return 0;
+        }
         if(ac.self.aiLevel > 0) {
             ailog("dmgloss rolls >> Rng advances 4");
             for(i = 0; i < 4; i++) {
@@ -594,6 +671,103 @@ void processAI(BattleContext *bc) {
         ailog(result + 1);
         bc->attacker.command = pos;
     }
+    return 1;
+
+}
+int AI_PostKOSwitch(BattleContext *bc) {
+    PokeClient *pc;
+    PokeClient *oc;
+    if(bc->attacker.aiControl) {
+        pc = &bc->attacker;
+        oc = &bc->defender;
+    } else {
+        pc = &bc->defender;
+        oc = &bc->attacker;
+    }
+    Pokemon mon;
+    unsigned char score, maxScore;
+    int picked = 6;
+    int disregardedBattlers = 0;
+    int i;
+    int j;
+    int moveStatus;
+    Move move;
+    Type defenderType1;
+    Type defenderType2;
+    Type attackType1;
+    Type attackType2;
+    while(disregardedBattlers != 0x3F) {
+        maxScore = 0;
+        picked = 6;
+        for(i=0; i < 6; i++) {
+            mon = pc->team[i];
+            if(mon.level != 0 && 
+            ((disregardedBattlers & (1<<i)) == 0) &&
+            pc->battler != i &&
+            mon.bVal.bHp > 0) {
+                defenderType1 = oc->team[oc->battler].info.primaryType;
+                if(oc->team[oc->battler].info.secondaryType == Type::None) {
+                    defenderType2 = oc->team[oc->battler].info.primaryType;
+                } else {
+                    defenderType2 = oc->team[oc->battler].info.secondaryType;
+                }
+                attackType1 = pc->team[i].info.primaryType;
+                if(pc->team[i].info.secondaryType == Type::None) {
+                    attackType2 = pc->team[i].info.primaryType;
+                } else {
+                    attackType2 = pc->team[i].info.secondaryType;
+                }
+                score = calcTypeMultiplier(attackType1, defenderType1, defenderType2);
+                score += calcTypeMultiplier(attackType2, defenderType1, defenderType2);
+                if(maxScore < score) {
+                    maxScore = score;
+                    picked = i;
+                }
+            } else {
+                disregardedBattlers |= (1 << i);
+            }
+        }
+        if(picked != 6){
+            mon = pc->team[picked];
+            for(i = 0; i < 4; i++) {
+                if(mon.moveset[i].id != MoveId::NO_MOVE) {
+                    moveStatus = 0;
+                    getTypeMultiplier(pc, oc, mon.moveset[i], 40, &moveStatus);
+                    if(moveStatus & MOVE_STATUS_SUPER_EFFECTIVE) {
+                        break;
+                    }
+                }
+            }
+            if(i == 4) {
+                disregardedBattlers |= (1 << picked);
+            } else {
+                return picked;
+            }
+        } else {
+            disregardedBattlers = 0x3F;
+        }
+    }
+    maxScore = 0;
+    picked = 6;
+    for(i = 0; i < 6; i++) {
+        mon = pc->team[i];
+        if(mon.level != 0 && 
+            pc->battler != i &&
+            mon.bVal.bHp > 0) {
+                for(j=0;j<4;j++) {
+                    move = mon.moveset[j];
+                    if(move.id != MoveId::NO_MOVE && move.power != 1) {
+                        score = calcDamage(bc, move, 1, 0, false, bc->defender.aiControl);
+                    }
+                    if(maxScore < score) {
+                        maxScore = score;
+                        picked = i;
+                    }
+                }
+            }
+    }
+    return picked;
+    
 
 }
 static void AI_INCDEC(AiContext *ac, int val) {
@@ -749,12 +923,112 @@ bool AI_CheckEffect(BattleContext *bc, AiContext *ac) {
             return AI_BasicConfuse(bc, ac);
         case(BATTLE_EFFECT_SET_HP_EQUAL_TO_USER):
         case(BATTLE_EFFECT_RECHARGE_AFTER):
+        case(BATTLE_EFFECT_MIRROR_COAT):
+        case(BATTLE_EFFECT_POWER_BASED_ON_LOW_SPEED):
             return AI_BasicRiskyDamage(bc, ac);
         case(BATTLE_EFFECT_STATUS_PARALYZE):
             return AI_BasicParalyze(bc, ac);
+        case(BATTLE_EFFECT_SP_ATK_SP_DEF_UP):
+            return AI_BasicCalmMind(bc, ac);
+        case(BATTLE_EFFECT_DEF_SPD_UP):
+            return AI_BasicCosmicPower(bc, ac);
+        case(BATTLE_EFFECT_RESTORE_HALF_HP):
+            return AI_BasicRecover(bc, ac);
+        case(BATTLE_EFFECT_WEATHER_SANDSTORM):
+            return AI_BasicSandstorm(bc, ac);
+        case(BATTLE_EFFECT_WEATHER_SUN):
+            return AI_BasicSunnyDay(bc, ac);
+        case(BATTLE_EFFECT_STATUS_BURN):
+            return AI_BasicBurn(bc, ac);
         default:
             return true;
     }
+}
+bool AI_BasicBurn(BattleContext *bc, AiContext *ac){
+    AbilityId abi = AI_CheckAbility(bc, ac);
+    if(abi == WATER_VEIL || abi == MAGIC_GUARD) {
+        return AI_DEC10(ac);
+    }
+    if(AI_IfCond(bc, ac, MON_CONDITION_ANY, true)) {
+        return AI_DEC10(ac);
+    }
+    if(ac->target.team[ac->target.battler].info.primaryType == Type::Fire || ac->target.team[ac->target.battler].info.secondaryType == Type::Fire) {
+        return AI_DEC10(ac);
+    }
+    if(ac->target.sideConditions & SIDE_CONDITION_SAFEGUARD) {
+        return AI_DEC10(ac);
+    }
+    return true;
+}
+bool AI_BasicSunnyDay(BattleContext *bc, AiContext *ac) {
+    AbilityId abi = AI_CheckAbility(bc, ac, false);
+    if(abi == FLOWER_GIFT || abi == LEAF_GUARD || abi == SOLAR_POWER) {
+        // do nothing
+    } else {
+        AbilityId abi2 = AI_CheckAbility(bc, ac);
+        if(abi2 == HYDRATION) {
+            if(AI_IfCond(bc, ac, MON_CONDITION_ANY, true)) {
+                return AI_DEC10(ac);
+            }
+        }
+    }
+    if(bc->weather & FIELD_CONDITION_SUNNY) {
+        AI_INCDEC(ac, -8);
+    }
+    return true;
+}
+bool AI_BasicSandstorm(BattleContext *bc, AiContext *ac) {
+    if(bc->weather & FIELD_CONDITION_SANDSTORM) {
+        AI_INCDEC(ac, -8);
+    }
+    return true; 
+}
+bool AI_BasicRecover(BattleContext *bc, AiContext *ac) {
+    if(AI_IfHpUnder(bc, ac, 100)) {
+        return true;
+    } 
+    AI_INCDEC(ac, -8);
+    return true;
+}
+bool AI_BasicCosmicPower(BattleContext *bc, AiContext *ac) {
+    AbilityId abi = AI_CheckAbility(bc, ac, false);
+    if(abi != SIMPLE) {
+        if(AI_IfPara(bc, ac, 1, Stat::DEFENSE, 12)) {
+            return AI_DEC10(ac);
+        }
+        if(AI_IfPara(bc, ac, 1, Stat::SPECIAL_DEFENSE, 12)) {
+            AI_INCDEC(ac, -8);
+            return true;
+        }
+    } else {
+        if(AI_IfPara(bc, ac, 2, Stat::DEFENSE, 8)) {
+            return AI_DEC10(ac);
+        }
+        if(AI_IfPara(bc, ac, 2, Stat::SPECIAL_DEFENSE, 8)) {
+            return AI_DEC10(ac);
+        }
+    }
+    return true;
+}
+bool AI_BasicCalmMind(BattleContext *bc, AiContext *ac) {
+    AbilityId abi = AI_CheckAbility(bc, ac, false);
+    if(abi != SIMPLE) {
+        if(AI_IfPara(bc, ac, 1, Stat::SPECIAL_ATTACK, 12)) {
+            return AI_DEC10(ac);
+        }
+        if(AI_IfPara(bc, ac, 1, Stat::SPECIAL_DEFENSE, 12)) {
+            AI_INCDEC(ac, -8);
+            return true;
+        }
+    } else {
+        if(AI_IfPara(bc, ac, 2, Stat::SPECIAL_ATTACK, 8)) {
+            return AI_DEC10(ac);
+        }
+        if(AI_IfPara(bc, ac, 2, Stat::SPECIAL_DEFENSE, 8)) {
+            return AI_DEC10(ac);
+        }
+    }
+    return true;
 }
 
 bool AI_BasicParalyze(BattleContext *bc, AiContext *ac) {
@@ -1026,8 +1300,403 @@ bool AI_ExpertSeq(BattleContext *bc, AiContext *ac) {
             return AI_ExpertParalyze(bc, ac);
         case(BATTLE_EFFECT_RECHARGE_AFTER):
             return AI_ExpertRechargeTurn(bc, ac);
+        case(BATTLE_EFFECT_SP_ATK_SP_DEF_UP):
+            return AI_ExpertSpDefenseUp(bc, ac);
+        case(BATTLE_EFFECT_BOUNCE):
+            return AI_ExpertInvulnTurn(bc, ac);
+        case(BATTLE_EFFECT_DEF_SPD_DOWN_HIT):
+            return AI_ExpertCloseCombat(bc, ac);
+        case(BATTLE_EFFECT_RECOVER_HALF_DAMAGE_DEALT):
+            return AI_ExpertDrainMove(bc, ac);
+        case(BATTLE_EFFECT_MIRROR_COAT):
+            return AI_ExpertMirrorCoat(bc, ac);
+        case(BATTLE_EFFECT_POWER_BASED_ON_LOW_SPEED):
+            return AI_ExpertGyroBall(bc, ac);
+        case(BATTLE_EFFECT_RESTORE_HALF_HP):
+            return AI_ExpertRecovery(bc, ac);
+        case(BATTLE_EFFECT_SP_ATK_DOWN_2):
+            return AI_ExpertOverheat(bc, ac);
+        case(BATTLE_EFFECT_SKIP_CHARGE_TURN_IN_SUN):
+            return AI_ExpertChargeTurnNoInvuln(bc, ac);
+        case(BATTLE_EFFECT_WEATHER_SUN):
+            return AI_ExpertSunnyDay(bc, ac);
+        case(BATTLE_EFFECT_SWITCH_HIT):
+            return AI_ExpertUTurn(bc, ac);
+        case(BATTLE_EFFECT_EVA_UP):
+            return AI_ExpertEvasionUp(bc, ac);
         default:
             return true;
+    }
+}
+bool AI_ExpertUTurn(BattleContext *bc, AiContext *ac){
+    AI_CheckTypeAdvantage(bc, ac);
+    if(ac->currentTypeAdvantage < NORMAL_EFFECTIVE){
+        AI_INCDEC(ac, -1);
+        return true;
+    }
+    // lots of annoying unique functions in this one...
+    // ignoring most of the logic, just implementing the RNG uses relevant for the 1 case 
+    // where we run into U-turn (vs yanmega) and it's relevant (not ineffective)
+    // TODO complete this function if ever relevant
+    if(AI_IfRndUnder(bc, 64)) {
+
+    } else {
+        AI_INCDEC(ac, -2);
+    }
+    if(AI_IfRndUnder(bc, 64)) {
+        if(!AI_IfRndUnder(bc, 128)) {
+            if(AI_IfRndUnder(bc, 128)) {
+                // incscore
+            } else {
+                AI_INCDEC(ac, 1);
+            }
+        }
+        if(AI_IfFirst(bc, ac)) {
+            if(AI_IfRndUnder(bc, 128)) {
+
+            } else {
+                AI_INCDEC(ac, 1);
+            }
+        }
+    } else {
+        AI_INCDEC(ac, -2);
+        return true;
+    }
+
+    return true;
+}
+bool AI_ExpertSunnyDay(BattleContext *bc, AiContext *ac){
+    if(AI_IfHpUnder(bc, ac, 40)) {
+        AI_INCDEC(ac, -1);
+        return true;
+    }
+    if(bc->weather & FIELD_CONDITION_HAILING ||
+    bc->weather & FIELD_CONDITION_SANDSTORM ||
+    bc->weather & FIELD_CONDITION_RAINING) {
+        AI_INCDEC(ac, 1);
+        return true;
+    }
+    AbilityId abi = AI_CheckAbility(bc, ac, false);
+    if(abi == FLOWER_GIFT){
+        AI_INCDEC(ac, 1);
+        return true;
+    }
+    if(abi == LEAF_GUARD) {
+        if(AI_IfCond(bc, ac, MON_CONDITION_ANY)) {
+            AI_INCDEC(ac, 1);
+            return true;
+        }
+    }
+    return true;
+}
+bool AI_ExpertChargeTurnNoInvuln(BattleContext *bc, AiContext *ac){
+    AI_CheckTypeAdvantage(bc, ac);
+    if(ac->currentTypeAdvantage < NORMAL_EFFECTIVE) {
+        AI_INCDEC(ac, -2);
+        return true;
+    }
+    if(ac->self.team[ac->self.battler].moveset[ac->currentIndex].effect == BATTLE_EFFECT_SKIP_CHARGE_TURN_IN_SUN) {
+        if(bc->weather & FIELD_CONDITION_SUNNY) {
+            AI_INCDEC(ac, 2);
+            return true;
+        }
+    }
+    if(AI_IfHeldItem(bc, ac, ITEM_POWER_HERB)) {
+        AI_INCDEC(ac, 2);
+        return true;
+    }
+    if(AI_IfHasMoveEffect(bc, ac, BATTLE_EFFECT_PROTECT, true)) {
+        AI_INCDEC(ac, -2);
+        return true;
+    }
+    if(AI_IfHpOver(bc, ac, 38)) {
+        return true;
+    }
+    AI_INCDEC(ac, -1);
+    return true;
+}
+bool AI_ExpertOverheat(BattleContext *bc, AiContext *ac){
+    AI_CheckTypeAdvantage(bc, ac);
+    if(ac->currentTypeAdvantage < NORMAL_EFFECTIVE) {
+        AI_INCDEC(ac, -1);
+        return true;
+    }
+    if(AI_IfFirst(bc, ac)) {
+        if(AI_IfHpOver(bc, ac, 80)) {
+            return true;
+        } else {
+            AI_INCDEC(ac, -1);
+            return true;
+        }
+    } else {
+        if(AI_IfHpOver(bc, ac, 60)) {
+            return true;
+        } else {
+            AI_INCDEC(ac, -1);
+            return true;
+        }
+    }
+    return true;
+}
+bool AI_ExpertRecovery(BattleContext *bc, AiContext *ac){
+    if(AI_IfHpUnder(bc, ac, 100)) {
+        if(AI_IfFirst(bc, ac)) {
+            // defender is faster
+            if(AI_IfHpUnder(bc, ac, 70)) {
+                // do nothing
+            } else {
+                if(AI_IfRndUnder(bc, 30)) {
+                    // do nothing
+                } else {
+                    AI_INCDEC(ac, -3);
+                    return true;
+                }
+            }
+            if(AI_IfHasMoveEffect(bc, ac, BATTLE_EFFECT_STEAL_STATUS_MOVE, true)) {
+                if(AI_IfRndUnder(bc, 100)) {
+                    return true;
+                }
+            }
+            if(AI_IfRndUnder(bc, 20)) {
+                return true;
+            } else {
+                AI_INCDEC(ac, 2);
+                return true;
+            }
+        } else {
+            AI_INCDEC(ac, -8);
+            return true;
+        }
+    } else {
+        AI_INCDEC(ac, -3);
+        return true;
+    }
+}
+bool AI_ExpertGyroBall(BattleContext *bc, AiContext *ac){
+    // does nothing
+    return true;
+}
+bool AI_ExpertMirrorCoat(BattleContext *bc, AiContext *ac){
+    if(AI_IfCond(bc, ac, MON_CONDITION_SLEEP, true) ||
+       AI_IfVolCondition(bc, ac, VOLATILE_CONDITION_ATTRACT, true) ||
+       AI_IfVolCondition(bc, ac, VOLATILE_CONDITION_CONFUSION, true)) {
+        return AI_ExpertMirrorCoat_Minus1(bc, ac);
+    }
+    if(AI_IfHpOver(bc, ac, 30)) {
+        // do nothing
+    } else {
+        if(AI_IfRndUnder(bc, 10)) {
+            // do nothing
+        } else {
+            AI_INCDEC(ac, -1);
+        }
+    }
+    if(AI_IfHpOver(bc, ac, 50)) {
+        // do nothing
+    } else {
+        if(AI_IfRndUnder(bc, 100)) {
+            // do nothing
+        } else {
+            AI_INCDEC(ac, -1);
+        }
+    }
+    if(AI_IfHasMoveEffect(bc, ac, BATTLE_EFFECT_COUNTER)) {
+        if(AI_IfRndUnder(bc, 100)) {
+            // do nothing
+        } else {
+            AI_INCDEC(ac, 4);
+        }
+        return true;
+    }
+    if(ac->target.previouslySelectedMove.power == 0) {
+        if(ac->target.team[ac->target.battler].bVal.turnsTaunted > 0) {
+            if(AI_IfRndUnder(bc, 100)) {
+                // do nothing
+            } else {
+                AI_INCDEC(ac, 1);
+            }
+        }
+        if(AI_CheckSpecialType(bc, ac, true)) {
+            return true;
+        } else {
+            if(AI_IfRndUnder(bc, 50)) {
+                return true;
+            } else {
+                if(AI_IfRndUnder(bc, 100)) {
+                    return true;
+                } else {
+                    AI_INCDEC(ac, 4);
+                    return true;
+                }
+            }
+        }
+    } else {
+        if(ac->target.team[ac->target.battler].bVal.turnsTaunted > 0) {
+            if(AI_IfRndUnder(bc, 100)) {
+                // do nothing
+            } else {
+                AI_INCDEC(ac, 1);
+            }
+        }
+        if(ac->target.previouslySelectedMove.attack == DamageType::SPECIAL) {
+            if(AI_IfRndUnder(bc, 100)) {
+                return true;
+            } else {
+                AI_INCDEC(ac, 1);
+            }
+            return true;
+        } else {
+            return AI_ExpertMirrorCoat_Minus1(bc, ac);
+        }
+    }
+    return true;
+}
+bool AI_ExpertMirrorCoat_Minus1(BattleContext *bc, AiContext *ac){
+    AI_INCDEC(ac, -1);
+    return true;
+}
+bool AI_ExpertDrainMove(BattleContext *bc, AiContext *ac){
+    AI_CheckTypeAdvantage(bc, ac);
+    if(ac->currentTypeAdvantage < NORMAL_EFFECTIVE) {
+        if(AI_IfRndUnder(bc, 50)) {
+            return true;
+        } else {
+            AI_INCDEC(ac, -3);
+        }
+    }
+    return true;
+}
+bool AI_ExpertCloseCombat(BattleContext *bc, AiContext *ac) {
+    AI_CheckTypeAdvantage(bc, ac);
+    if(ac->currentTypeAdvantage < NORMAL_EFFECTIVE) {
+        AI_INCDEC(ac, -1);
+        return true;
+    }
+    if(AI_IfFirst(bc, ac)) {
+        if(AI_IfHpOver(bc, ac, 80)) {
+            return true;
+        } else {
+            AI_INCDEC(ac, -1);
+        }
+    }
+    if(AI_IfHpOver(bc, ac, 60)) {
+        return true;
+    } else {
+        AI_INCDEC(ac, -1);
+        return true;
+    }
+
+}
+bool AI_ExpertInvulnTurn(BattleContext *bc, AiContext *ac) {
+    if(AI_IfHeldItem(bc, ac, ITEM_POWER_HERB)) {
+        AI_INCDEC(ac, 2);
+        return true; // terminate
+    }
+    if(AI_IfHasMoveEffect(bc, ac, BATTLE_EFFECT_PROTECT, true)) {
+        AI_INCDEC(ac, -1);
+        return true;
+    } else {
+        AI_CheckTypeAdvantage(bc, ac);
+        if(ac->currentTypeAdvantage == IMMUNE_EFFECTIVE || ac->currentTypeAdvantage == QUAD_NOT_EFFECTIVE || ac->currentTypeAdvantage == NOT_EFFECTIVE) {
+            AI_INCDEC(ac, 1);
+            return true; // bug 
+        }
+        if(AI_IfHeldItem(bc, ac, ITEM_POWER_HERB)) {
+            AI_INCDEC(ac, 1);
+            return true; 
+        }
+        if(AI_IfCond(bc, ac, MON_CONDITION_TOXIC, true) || 
+        AI_IfVolCondition(bc, ac, VOLATILE_CONDITION_CURSE, true) ||
+        AI_IfMoveEffect(bc, ac, MOVE_EFFECT_LEECH_SEED, true)) {
+            if(AI_IfRndUnder(bc, 80)) {
+                // do nothing
+            } else {
+                AI_INCDEC(ac, 1);
+            }
+            return true;
+
+        }
+        int weatherVar = bc->weather;
+        if(weatherVar & FIELD_CONDITION_SANDSTORM) {
+            if(AI_CheckImmuneSandstorm(bc, ac)) {
+                if(AI_IfRndUnder(bc, 80)) {
+                    // do nothing
+                } else {
+                    AI_INCDEC(ac, 1);
+                }
+                return true;
+            }
+        }
+        if(weatherVar & FIELD_CONDITION_HAILING) {
+            if(AI_CheckImmuneHail(bc, ac)) {
+                if(AI_IfRndUnder(bc, 80)) {
+                    // do nothing
+                } else {
+                    AI_INCDEC(ac, 1);
+                }
+                return true;
+            }
+        }
+        if(AI_IfFirst(bc, ac)) {
+            return true;
+        }
+        if(ac->target.previouslySelectedMove.effect == BATTLE_EFFECT_NEXT_ATTACK_ALWAYS_HITS) {
+            return true;
+        } else {
+            if(AI_IfRndUnder(bc, 80)) {
+                // do nothing
+            } else {
+                AI_INCDEC(ac, 1);
+            } 
+        }
+    }
+    return true;
+}
+bool AI_ExpertSpDefenseUp(BattleContext *bc, AiContext *ac) {
+    if(AI_IfPara(bc, ac, 0, Stat::SPECIAL_DEFENSE, 9)) {
+        if(AI_IfHpUnder(bc, ac, 100)) {
+            // do nothing
+        } else {
+            if(AI_IfRndUnder(bc, 128)) {
+                // do nothing
+            } else {
+                AI_INCDEC(ac, 2);
+            }
+        }
+    } else {
+        if(AI_IfRndUnder(bc, 100)) {
+            // do nothing
+        } else {
+            AI_INCDEC(ac, -1);
+        }
+    }
+    if(AI_IfHpUnder(bc, ac, 70)) {
+        // do nothing
+    } else {
+        if(AI_IfRndUnder(bc, 200)) {
+            return true; // terminate
+        }
+    }
+    if(AI_IfHpUnder(bc, ac, 40)) {
+        AI_INCDEC(ac, -2);
+        return true; // terminate 
+    } else {
+        if(ac->target.previouslySelectedMove.power == 0) {
+            // do nothing
+        } else {
+            if(AI_CheckPreviousMoveType(bc, ac, DamageType::PHYSICAL)) {
+                AI_INCDEC(ac, -2);
+                return true; // terminate 
+            } else if(AI_IfRndUnder(bc, 60)) {
+                return true; // terminate
+            }
+        }
+        if(AI_IfRndUnder(bc, 60)) {
+            return true;
+        } else {
+            AI_INCDEC(ac, -2);
+            return true; // terminate 
+        }
     }
 }
 bool AI_ExpertRechargeTurn(BattleContext *bc, AiContext *ac) {

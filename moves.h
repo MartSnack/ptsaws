@@ -93,7 +93,65 @@ enum class MoveId {
     TOXIC_SPIKES,
     SUCKER_PUNCH,
 
+    BUG_BUZZ,
+    AIR_SLASH,
+    U_TURN,
+    IRON_HEAD,
+    X_SCISSOR,
+    CLOSE_COMBAT,
+    MEGAHORN,
+    STONE_EDGE,
+    ATTACK_ORDER,
+    DEFEND_ORDER,
+    HEAL_ORDER,
+    POWER_GEM,
+    CROSS_POISON,
+    AERIAL_ACE,
 
+    EARTH_POWER,
+    SANDSTORM,
+    ZEN_HEADBUTT,
+    AQUA_TAIL,
+    AVALANCHE,
+    ROCK_WRECKER,
+
+    FLAMETHROWER,
+    SLUDGE_BOMB,
+    DARK_PULSE,
+    SUNNY_DAY,
+    OVERHEAT,
+    WILL_O_WISP,
+    FLARE_BLITZ,
+    SOLARBEAM,
+    BOUNCE,
+    MACH_PUNCH,
+    THUNDERBOLT,
+    HYPER_BEAM,
+
+    LIGHT_SCREEN,
+    REFLECT,
+    CALM_MIND,
+    GYRO_BALL,
+    RECOVER,
+    ENERGY_BALL,
+    PSYCHO_CUT,
+    DRAIN_PUNCH,
+    LEAF_BLADE,
+
+    SILVER_WIND,
+    EXTRASENSORY,
+    MIRROR_COAT,
+    DRAGON_PULSE,
+    ICE_BEAM,
+    AURA_SPHERE,
+    EXTREME_SPEED,
+    WATER_PULSE,
+    SHOCK_WAVE,
+    DRAGON_RUSH,
+    STEALTH_ROCK,
+    ENCORE,
+    PSYCHIC,
+    TRICK_ROOM,
 };
 struct Move {
         MoveId id;
@@ -164,4 +222,65 @@ extern Move GigaImpact;
 extern Move Protect;
 extern Move ToxicSpikes;
 extern Move SuckerPunch;
+
+extern Move BugBuzz;
+extern Move AirSlash;
+extern Move UTurn;
+extern Move IronHead;
+extern Move XScissor;
+extern Move CloseCombat;
+extern Move Megahorn;
+extern Move StoneEdge;
+extern Move AttackOrder;
+extern Move DefendOrder;
+extern Move HealOrder;
+extern Move PowerGem;
+extern Move CrossPoison;
+extern Move AerialAce;
+
+extern Move EarthPower;
+extern Move Sandstorm;
+extern Move ZenHeadbutt;
+extern Move AquaTail;
+extern Move Avalanche;
+extern Move RockWrecker;
+
+extern Move Flamethrower;
+extern Move SludgeBomb;
+extern Move DarkPulse;
+extern Move SunnyDay;
+extern Move Overheat;
+extern Move WillOWisp;
+extern Move FlareBlitz;
+extern Move Solarbeam;
+extern Move Bounce;
+extern Move MachPunch;
+extern Move Thunderbolt;
+extern Move HyperBeam;
+
+extern Move LightScreen;
+extern Move Reflect;
+extern Move CalmMind;
+extern Move GyroBall;
+extern Move Recover;
+extern Move EnergyBall;
+extern Move PsychoCut;
+extern Move DrainPunch;
+extern Move LeafBlade;
+
+extern Move SilverWind;
+extern Move Extrasensory;
+extern Move MirrorCoat;
+extern Move DragonPulse;
+extern Move IceBeam;
+extern Move AuraSphere;
+extern Move Extremespeed;
+extern Move WaterPulse;
+extern Move ShockWave;
+extern Move DragonRush;
+
+extern Move StealthRock;
+extern Move Encore;
+extern Move PsychicMove;
+extern Move TrickRoom;
 #endif /* MOVES_H_ */

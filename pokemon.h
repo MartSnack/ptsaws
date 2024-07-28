@@ -23,6 +23,9 @@
 #define ITEM_HYPER_POTION 12
 #define ITEM_FULL_RESTORE 13
 #define ITEM_STICKY_BARB 14
+#define ITEM_POWER_HERB 15
+#define ITEM_BOOST_ELECTRIC 16
+#define ITEM_BOOST_GROUND 17
 
 // int calcDamage(Pokemon attacker, Pokemon defender, Move move, int crit = 1, int randomRoll = 100);
 
@@ -71,6 +74,30 @@ enum AbilityId {
     STEADFAST, //niy
     LIMBER, //niy
     TRUANT, // niy
+    SPEED_BOOST, //niy
+    SWARM, // niy
+    PRESSURE, // niy
+    BATTLE_ARMOR, // niy
+    OBLIVIOUS, // niy
+    ROCK_HEAD, // niy
+    LIGHTNING_ROD, // niy
+    EARLY_BIRD, //niy
+    FLAME_BODY, // niy
+    SYNCHRONIZE, //niy
+    MARVEL_SCALE, //niy
+    SAND_VEIL, //niy
+    TINTED_LENS, // niy
+    TECHNICIAN, // niy
+    SNIPER, //niy
+    GUTS, // niy
+    STURDY, // niy
+    SOLID_ROCK, // niy
+    FILTER, // niy
+    HEATPROOF, // niy
+    FLOWER_GIFT, // niy
+    SOLAR_POWER, // niy
+    WATER_VEIL, // niy
+
 };
 // note that we really only care what stat nature is reducing
 // since we can just extrapolate that our bonus stat is whatever
@@ -127,6 +154,34 @@ enum Mons {
     RIOLU,
     INFERNAPE,
 
+    YANMEGA,
+    SCIZOR,
+    DRAPION,
+    HERACROSS,
+    VESPIQUEN,
+
+    WHISCASH,
+    GLISCOR,
+    GOLEM,
+    RHYPERIOR,
+
+    HOUNDOOM,
+    FLAREON,
+    RAPIDASH,
+    MAGMORTAR,
+
+    MR_MIME,
+    ESPEON,
+    ALAKAZAM,
+    GALLADE,
+    BRONZONG,
+
+    SPIRITOMB,
+    MILOTIC,
+    LUCARIO,
+    GARCHOMP,
+
+    AZELF,
 };
 
 
@@ -153,6 +208,8 @@ struct BattleVal {
     int critStg;
 
     int turnsTaunted;
+    int turnsEncored;
+    bool isCharging; // currently charging a move like solarbeam
 
     int turnsProtected;
     bool isProtected;
@@ -161,6 +218,7 @@ struct BattleVal {
 
     Move moveHit;
     Move movePrevByBattler;
+    Move encoredMove;
 };
 class PokeInfo{
     public:

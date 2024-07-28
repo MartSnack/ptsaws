@@ -230,6 +230,21 @@ bool applyEndeavor(BattleContext *bc) {
     }
     return false;
 }
+bool applyMirrorCoat(BattleContext *bc) {
+    if(bc->defender.previouslySelectedMove.attack == DamageType::SPECIAL && bc->previousDmg > 0) {
+        bc->cDmg = bc->previousDmg * 2;
+        return true;
+    } else {
+        return false;
+    }
+}
+bool applyGyroBall(BattleContext *bc) {
+    bc->cPwr = 1 + 25 * calcSpeed(&bc->defender) / calcSpeed(&bc->attacker);
+    if(bc->cPwr > 150) {
+        bc->cPwr = 150;
+    }
+    return true;
+}
 bool applySubstitute(BattleContext *bc) {
     Pokemon* attacker = &bc->attacker.team[bc->attacker.battler];
     if(attacker->bVal.substituteHp == 0) {
@@ -250,6 +265,18 @@ bool applyRecoilQuarter(BattleContext *bc) {
     int recoil = bc->realDmg / 4;
     dealDamage(&bc->attacker.team[bc->attacker.battler], recoil, false); // apply indirect damage equal to a quarter of real damage dealt
     return true; // this effect always succeeds if its triggered -- unless the pokemon has an ability that cancels it but we'll TODO that if it comes up
+}
+bool applyDrainHalf(BattleContext *bc) {
+    int drain = bc->realDmg / 2;
+    heal(&bc->attacker.team[bc->attacker.battler], drain);
+    return true;
+}
+bool applyRecover(BattleContext *bc) {
+    if(bc->attacker.team[bc->attacker.battler].bVal.bHp == bc->attacker.team[bc->attacker.battler].cHp) {
+        return false; // at full hp, fails
+    }
+    heal(&bc->attacker.team[bc->attacker.battler], bc->attacker.team[bc->attacker.battler].cHp/2);
+    return true;
 }
 
 bool applyYawn(BattleContext *bc) {
@@ -329,6 +356,51 @@ bool applyToxicSpikes(BattleContext *bc) {
         return true;
     }
 }
+bool applySandstorm(BattleContext *bc) {
+    if(bc->weather & FIELD_CONDITION_SANDSTORM) {
+        return false; // fails
+    }
+    bc->weather = FIELD_CONDITION_SANDSTORM_TEMP;
+    bc->weatherTurns = 5;
+    return true;
+}
+bool applySunnyDay(BattleContext *bc) {
+    if(bc->weather & FIELD_CONDITION_SUNNY) {
+        return false; // fails
+    }
+    bc->weather = FIELD_CONDITION_SUNNY_TEMP;
+    bc->weatherTurns = 5;
+    return true;
+}
+
+bool applyStealthRock(BattleContext *bc) {
+    if(bc->defender.sideConditions & SIDE_CONDITION_STEALTH_ROCK) {
+        return false; // already have stealth rock up
+    }
+    bc->defender.sideConditions |= SIDE_CONDITION_STEALTH_ROCK;
+    return true;
+}
+bool applyEncore(BattleContext *bc) {
+    if(bc->defender.previouslySelectedMove.id != MoveId::NO_MOVE) {
+        bc->defender.team[bc->defender.battler].bVal.encoredMove = bc->defender.previouslySelectedMove;
+        bc->defender.team[bc->defender.battler].bVal.turnsEncored = advanceSeed(bc, "Encore rng") % 5 + 3;
+        return true;
+    } else {
+        return false;
+    }
+}
+bool applyTrickRoom(BattleContext *bc){
+    if(bc->weather & FIELD_CONDITION_TRICK_ROOM) {
+        return false; // trick room already active
+    }
+    bc->weather |= (1<<16 | 1<<18); // apply trick room
+    advanceSeed(bc);
+    advanceSeed(bc);
+    advanceSeed(bc);
+    advanceSeed(bc);
+    // okay so trick room seems to advance the rng 4? Maybe the game is recalculating the speed rands
+    return true;
+}
 bool applyEffect(Move move, BattleContext *bc) {
     // gigantic switch/case lol
     switch(move.effect) {
@@ -337,10 +409,14 @@ bool applyEffect(Move move, BattleContext *bc) {
             return applyBurn(&bc->defender.team[bc->defender.battler], bc);
         case BATTLE_EFFECT_PARALYZE_HIT:
         case BATTLE_EFFECT_STATUS_PARALYZE:
+        case BATTLE_EFFECT_BOUNCE:
             return applyParalysis(&bc->defender.team[bc->defender.battler], bc);
         case BATTLE_EFFECT_STATUS_POISON:
         case BATTLE_EFFECT_POISON_HIT:
+        case BATTLE_EFFECT_HIGH_CRITICAL_POISON_HIT:
             return applyPoison(&bc->defender.team[bc->defender.battler], bc);
+        case BATTLE_EFFECT_FREEZE_HIT:
+            return applyFreeze(&bc->defender.team[bc->defender.battler], bc);
         case BATTLE_EFFECT_STATUS_CONFUSE:
         case BATTLE_EFFECT_CONFUSE_HIT:
             return applyConfusion(&bc->defender.team[bc->defender.battler], bc);
@@ -371,6 +447,10 @@ bool applyEffect(Move move, BattleContext *bc) {
             return applySubstitute(bc);
         case BATTLE_EFFECT_RECOIL_QUARTER:
             return applyRecoilQuarter(bc);
+        case BATTLE_EFFECT_RECOVER_HALF_DAMAGE_DEALT:
+            return applyDrainHalf(bc);
+        case BATTLE_EFFECT_RESTORE_HALF_HP:
+            return applyRecover(bc);
         case BATTLE_EFFECT_STATUS_SLEEP_NEXT_TURN: 
             return applyYawn(bc);
         case BATTLE_EFFECT_STATUS_BADLY_POISON:
@@ -387,6 +467,35 @@ bool applyEffect(Move move, BattleContext *bc) {
             return applyProtect(bc);
         case BATTLE_EFFECT_TOXIC_SPIKES:
             return applyToxicSpikes(bc);
+        case BATTLE_EFFECT_SP_ATK_SP_DEF_UP: 
+            modifyStat(true, Stat::SPECIAL_ATTACK, 1, bc);
+            return modifyStat(true, Stat::SPECIAL_DEFENSE, 1, bc);
+        case BATTLE_EFFECT_DEF_SPD_DOWN_HIT:
+            modifyStat(true, Stat::DEFENSE, -1, bc);
+            return modifyStat(true, Stat::SPECIAL_DEFENSE, -1, bc);
+        case BATTLE_EFFECT_DEF_SPD_UP:
+            modifyStat(true, Stat::DEFENSE, 1, bc);
+            return modifyStat(true, Stat::SPECIAL_DEFENSE, 1, bc);
+        case BATTLE_EFFECT_USER_SP_ATK_DOWN_2:
+            return modifyStat(true, Stat::SPECIAL_ATTACK, -2, bc);
+        case BATTLE_EFFECT_RAISE_ALL_STATS_HIT:
+            modifyStat(true, Stat::ATTACK, 1, bc);
+            modifyStat(true, Stat::DEFENSE, 1, bc);
+            modifyStat(true, Stat::SPECIAL_ATTACK, 1, bc);
+            modifyStat(true, Stat::SPECIAL_DEFENSE, 1, bc);
+            modifyStat(true, Stat::SPEED, 1, bc);
+            return true;
+
+        case BATTLE_EFFECT_WEATHER_SANDSTORM:
+            return applySandstorm(bc);
+        case BATTLE_EFFECT_WEATHER_SUN:
+            return applySunnyDay(bc);
+        case BATTLE_EFFECT_STEALTH_ROCK:
+            return applyStealthRock(bc);
+        case BATTLE_EFFECT_ENCORE:
+            return applyEncore(bc);
+        case BATTLE_EFFECT_TRICK_ROOM:
+            return applyTrickRoom(bc);
         default:
             return false;
     }
