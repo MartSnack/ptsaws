@@ -492,10 +492,12 @@ int main(int argc, char* argv[]) {
     cList.commands[11][0] = COMMAND_MOVE_SLOT_1; // encore
     cList.commands[12][0] = COMMAND_SWITCH | POKE_SLOT_4; // send out haunter
     cList.commands[13][0] = COMMAND_USE_ITEM_FULL_RESTORE | POKE_SLOT_3; // heal hippo
+    // cList.commands[13][0] = COMMAND_MOVE_SLOT_3; // don't heal hiippo
+
     cList.commands[14][0] = COMMAND_MOVE_SLOT_1; // trick room
     cList.commands[15][0] = COMMAND_SWITCH | POKE_SLOT_6; // infernape out
     cList.commands[16][0] = COMMAND_MOVE_SLOT_2 | COMMAND_SWITCH | POKE_SLOT_3; // protect and then send out hippo
-    cList.commands[17][0] = COMMAND_MOVE_SLOT_3; // protect
+    cList.commands[17][0] = COMMAND_MOVE_SLOT_1; // earthquake
     cList.commands[18][0] = COMMAND_MOVE_SLOT_1 | COMMAND_SWITCH | POKE_SLOT_1; // earthquake KOs, send in azelf
     cList.commands[19][0] = COMMAND_MOVE_SLOT_2 | COMMAND_SWITCH | POKE_SLOT_6;
     cList.commands[20][0] = COMMAND_MOVE_SLOT_1;

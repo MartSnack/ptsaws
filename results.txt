@@ -358,3 +358,26 @@ highest cycles: 6274
 starting seed: 30260966
 lowest cycles: 1
 starting seed: 13420
+
+------
+Aaron fight
+
+<booting>
+Loaded Commands
+Chunk size: 2000000
+Player won. Lowest hp -> 340 // Seed: 415851 // Fainted: 0
+Player won. Lowest hp -> 339 // Seed: 3269280 // Fainted: 0
+Player won. Lowest hp -> 340 // Seed: 5329348 // Fainted: 0
+Player won. Lowest hp -> 346 // Seed: 6324593 // Fainted: 0
+Player won. Lowest hp -> 343 // Seed: 8946186 // Fainted: 0
+Player won. Lowest hp -> 341 // Seed: 10954371 // Fainted: 0
+Player won. Lowest hp -> 348 // Seed: 13537769 // Fainted: 0
+Player won. Lowest hp -> 346 // Seed: 14320527 // Fainted: 0
+Player won. Lowest hp -> 339 // Seed: 16575174 // Fainted: 0
+Player won. Lowest hp -> 342 // Seed: 18567228 // Fainted: 0
+Player won. Lowest hp -> 342 // Seed: 20940776 // Fainted: 0
+Player won. Lowest hp -> 340 // Seed: 22106564 // Fainted: 0
+Player won. Lowest hp -> 340 // Seed: 24345816 // Fainted: 0
+Player won. Lowest hp -> 342 // Seed: 27072612 // Fainted: 0
+Player won. Lowest hp -> 343 // Seed: 28358034 // Fainted: 0
+Player won. Lowest hp -> 342 // Seed: 30528973 // Fainted: 0

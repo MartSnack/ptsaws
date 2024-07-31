@@ -99,6 +99,7 @@ void PokeClient::pokeSwitch(int nextBattler) {
     if(sideConditions & SIDE_CONDITION_STEALTH_ROCK) {
         triggers |= TRIGGER_STEALTH_ROCK;
     }
+    previouslySelectedMove = Empty;
 }
 int modifyStatValue(int base, int stage){
     int interm = base * StatBonusByStage[stage].numerator;
@@ -518,6 +519,9 @@ bool useMove(Move move, BattleContext *bc) {
                         if(bc->defender.team[bc->defender.battler].bVal.substituteWasHit) {
                             shouldApplyEffect = false; // do not apply effect instead.  We still roll the random value though.  
                         }                
+                    } else {
+                        advanceSeed(bc); // even if the defender has fainted, we still use the rng
+                        // most likely this is because some moves have a secondary effect that affects the user
                     }
 
                 } else {
@@ -732,8 +736,15 @@ void executeCommand(BattleContext *bc) {
         bool success = useMove(commandMove, bc);
         if(success) {
             log("\tMove Succeeded > RNG advances 2");
-            advanceSeed(bc);
-            advanceSeed(bc);
+            // not sure why this occurs, but pretty certain this is correct now
+            // what these random values are used for is unknown.
+            if(bc->attacker.team[bc->attacker.battler].bVal.bHp > 0) {
+                advanceSeed(bc);
+            }
+            if(bc->defender.team[bc->defender.battler].bVal.bHp > 0) {
+                advanceSeed(bc);
+
+            }
         }
         bc->attacker.command &= ~COMMAND_MOVE; // remove command move 
 
@@ -927,68 +938,9 @@ void triggerEndTurnConditions(PokeClient *p, BattleContext *bc) {
 
 
 }
-int getSwitchNum(unsigned long command) {
-    int switchNum = log2(command & POKE_SLOTS);
-    switchNum = switchNum - COMMAND_SWITCH_OFFSET; // from 4-9 to 0-5
-    return switchNum;
-}
-// switch in a new mon if we need it
-// returns true if we swapped
-// return false if we didn't.
-bool switchIn(BattleContext *bc, bool attacker) {
-    PokeClient *pc;
-    PokeClient *opc;
-    if(attacker) {
-        pc = &bc->attacker;
-        opc = &bc->defender;
-    } else {
-        pc = &bc->defender;
-        opc = &bc->attacker;
-    }
-    int numValidMons = 0;
-    if(!pc->aiControl) {
-        // player control
-        if(pc->command & COMMAND_SWITCH) { // we have a switch command that has persisted through the command selection
-            int switchNum = getSwitchNum(pc->command);
-            if(pc->team[switchNum].bVal.bHp > 0) {
-                log(pc->name + " sends out " + pc->team[switchNum].info.name);
-                pc->pokeSwitch(switchNum);
-                return true;
-            }
-        }
-    } else {
-        // the opponent has fainted
-        int pick = AI_PostKOSwitch(bc);
-
-        if(opc->command & COMMAND_SWITCH) {
-            int switchNum = getSwitchNum(opc->command);
-            
-            if(opc->team[switchNum].bVal.bHp > 0) {
-                log(opc->name + " sends out " + opc->team[switchNum].info.name);
-                opc->pokeSwitch(switchNum);
-                // do not return here, because the fight could be over
-            }
-        }
-        if(pick < 6) {
-            pc->pokeSwitch(pick);
-            return true;
-        }
-        for(int i = 0; i<6; i++) {
-            if(pc->team[i].bVal.bHp > 0) {
-                    pc->pokeSwitch(i);
-                    log(pc->name + " sends out " + pc->team[i].info.name);
-                    return true;
-                }
-        }
-    }
-
-
-
-    return false;
-}
 // doAttacker -> whether to trigger the attacker's effect or defenders
 // so that we don't have to do everything twice.
-bool preTurnEffects(BattleContext *bc, bool doAttacker) {
+bool activateTriggers(BattleContext *bc, bool doAttacker) {
     PokeClient *applyClient;
     PokeClient *receiveClient;
     if(doAttacker) {
@@ -1038,10 +990,80 @@ bool preTurnEffects(BattleContext *bc, bool doAttacker) {
     }
     if(applyClient->triggers & TRIGGER_STEALTH_ROCK) {
         int typeResult = calcTypeMultiplier(Type::Rock, applyClient->team[applyClient->battler].info.primaryType, applyClient->team[applyClient->battler].info.secondaryType);
-        dealDamage(&applyClient->team[applyClient->battler], applyClient->team[applyClient->battler].cHp / (320 / typeResult), false); // indirect damage
+        int stealthDamage = applyClient->team[applyClient->battler].cHp / (320 / typeResult);
+        if(DEBUG) {
+            std::cout << "Stealth rock deals " << stealthDamage << " damage to " << logName(applyClient->team[applyClient->battler], stealthDamage) << std::endl;
+        }
+        dealDamage(&applyClient->team[applyClient->battler], stealthDamage, false); // indirect damage
     }
     applyClient->triggers = 0; // reset all triggers.  TODO: might need to not reset all of them
     return true;
+}
+
+int getSwitchNum(unsigned long command) {
+    int switchNum = log2(command & POKE_SLOTS);
+    switchNum = switchNum - COMMAND_SWITCH_OFFSET; // from 4-9 to 0-5
+    return switchNum;
+}
+// switch in a new mon if we need it
+// returns true if we swapped
+// return false if we didn't.
+bool switchIn(BattleContext *bc, bool attacker) {
+    PokeClient *pc;
+    PokeClient *opc;
+    if(attacker) {
+        pc = &bc->attacker;
+        opc = &bc->defender;
+    } else {
+        pc = &bc->defender;
+        opc = &bc->attacker;
+    }
+    int numValidMons = 0;
+    if(!pc->aiControl) {
+        // player control
+        if(pc->command & COMMAND_SWITCH) { // we have a switch command that has persisted through the command selection
+            int switchNum = getSwitchNum(pc->command);
+            if(pc->team[switchNum].bVal.bHp > 0) {
+                log(pc->name + " sends out " + pc->team[switchNum].info.name);
+                pc->pokeSwitch(switchNum);
+                return true;
+            }
+        } else {
+            for(int i = 0; i<6; i++) {
+                if(pc->team[i].bVal.bHp > 0) {
+                    pc->pokeSwitch(i);
+                    log(pc->name + " sends out " + pc->team[i].info.name);
+                    return true;
+                }
+            }
+        }
+    } else {
+        // the opponent has fainted
+        int pick = AI_PostKOSwitch(bc);
+
+        if(opc->command & COMMAND_SWITCH) {
+            int switchNum = getSwitchNum(opc->command);
+            
+            if(opc->team[switchNum].bVal.bHp > 0) {
+                log(opc->name + " sends out " + opc->team[switchNum].info.name);
+                opc->pokeSwitch(switchNum);
+                // do not return here, because the fight could be over
+            }
+        }
+        if(pick < 6) {
+            pc->pokeSwitch(pick);
+            return true;
+        }
+        for(int i = 0; i<6; i++) {
+            if(pc->team[i].bVal.bHp > 0) {
+                    pc->pokeSwitch(i);
+                    log(pc->name + " sends out " + pc->team[i].info.name);
+                    return true;
+                }
+        }
+    }
+
+    return false;
 }
 
 bool endOfTurn(BattleContext *bc) {
@@ -1060,10 +1082,8 @@ bool endOfTurn(BattleContext *bc) {
                 bc->branch++;
             }
             // im tired
-            log("Skipping seed advancement due to defender switching");
-        } else {
-            advanceSeed(bc, "Unknown, defender isn't dead");
         }
+        advanceSeed(bc, "Unknown, defender isn't dead");
         triggerEndTurnConditions(&bc->defender, bc);
         triggerEndTurnConditions(&bc->attacker, bc);
         if(bc->defender.team[bc->defender.battler].bVal.bHp <= 0) {
@@ -1072,11 +1092,7 @@ bool endOfTurn(BattleContext *bc) {
         }
 
         if(shouldContinue) {
-            if(bc->attacker.team[bc->attacker.battler].bVal.bHp <= 0 && !bc->attacker.aiControl) {
-                log("Skipping seed advancement due to attacker switching and being under AI control");
-            } else {
-                advanceSeed(bc);
-            }
+            advanceSeed(bc);
             if(bc->attacker.team[bc->attacker.battler].bVal.bHp <= 0) {
                 if(bc->attacker.command & COMMAND_BRANCH_IF_KO) {
                     bc->branch++;
@@ -1109,12 +1125,10 @@ bool endOfTurn(BattleContext *bc) {
                     return true;
                 }
                 log("before AI starts >> RNG advances 4");
-                if(bc->defender.aiControl & bc->defender.isSwitching) {
-                    log("Skipping first AI rng usage due to unknown reason -> ai defender is switching and took its turn");
-                } else {
-                    advanceSeed(bc);
-                }
+                advanceSeed(bc);
                 advanceSeed(bc); // ai advances the seed 4 for some reason we don't know yet
+                activateTriggers(bc, true); // attacker effects
+                activateTriggers(bc, false); // defender effects
                 processAI(bc);
                 return true;
             } else {
@@ -1145,8 +1159,8 @@ bool doTurn(BattleContext *bc) {
         bc->attacker = bc->defender;
         bc->defender = pc;
     }
-    preTurnEffects(bc, true); // attacker effects
-    preTurnEffects(bc, false); // defender effects
+    activateTriggers(bc, true); // attacker effects
+    activateTriggers(bc, false); // defender effects
 
     // turn overall start advances 4
     log("Turn Starts > RNG Advances 4"); // speed rand values that we don't really need
@@ -1158,8 +1172,8 @@ bool doTurn(BattleContext *bc) {
     PokeClient tempC = bc->attacker;
     bc->attacker = bc->defender;
     bc->defender = tempC;
-    preTurnEffects(bc, true); // attacker effects
-    preTurnEffects(bc, false); // defender effects
+    activateTriggers(bc, true); // attacker effects
+    activateTriggers(bc, false); // defender effects
     if(bc->attacker.team[bc->attacker.battler].bVal.bHp > 0) {
         // only do command if we're still alive
         log("Next battler turn > Rng advances 2");

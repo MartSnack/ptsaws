@@ -1301,6 +1301,7 @@ bool AI_ExpertSeq(BattleContext *bc, AiContext *ac) {
         case(BATTLE_EFFECT_RECHARGE_AFTER):
             return AI_ExpertRechargeTurn(bc, ac);
         case(BATTLE_EFFECT_SP_ATK_SP_DEF_UP):
+        case(BATTLE_EFFECT_DEF_SPD_UP):
             return AI_ExpertSpDefenseUp(bc, ac);
         case(BATTLE_EFFECT_BOUNCE):
             return AI_ExpertInvulnTurn(bc, ac);

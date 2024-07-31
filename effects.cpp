@@ -308,9 +308,7 @@ bool applyRevenge(BattleContext *bc) {
 }
 
 bool applyFlinchPlus(BattleContext *bc, int condition) {
-    if((advanceSeed(bc) % 100) < 10) {
-        applyFlinch(&bc->defender.team[bc->defender.battler], bc);
-    }
+
     if((advanceSeed(bc) % 100) < 10) {
         if(condition & MON_CONDITION_PARALYSIS) {
             applyParalysis(&bc->defender.team[bc->defender.battler], bc);
@@ -319,6 +317,9 @@ bool applyFlinchPlus(BattleContext *bc, int condition) {
         } else if(condition & MON_CONDITION_FREEZE) {
             applyFreeze(&bc->defender.team[bc->defender.battler], bc);
         }
+    }
+    if((advanceSeed(bc) % 100) < 10) {
+        applyFlinch(&bc->defender.team[bc->defender.battler], bc);
     }
     return true;
 
