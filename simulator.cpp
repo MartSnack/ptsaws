@@ -157,6 +157,8 @@ int sumTeamHealth(PokeClient* pc, BattleReport *br) {
 }
 BattleReport simulate(unsigned long startingSeed, CommandList cList, SimulationReport *sr) {
     BattleContext bc = setupVarFight(startingSeed);
+    activateTriggers(&bc, true);
+    activateTriggers(&bc, false);
     bc.terminate = false;
     bc.branch = 0;
     // BattleContext bc = setupJupiterFight(startingSeed);
@@ -466,43 +468,29 @@ int main(int argc, char* argv[]) {
         }
     }
     cList.defaultCommand = COMMAND_MOVE_SLOT_2;
-    // p1.team[0] = azelf;
+    // p1.team[0] = hippo;
     // p1.team[1] = vapor;
-    // p1.team[2] = hippo;
+    // p1.team[2] = azelf;
     // p1.team[3] = haunter;
     // p1.team[4] = togekiss;
     // p1.team[5] = infernape;
     // Move hippoMoveset[4] = {Earthquake, Yawn, Protect, StealthRock};
-    // Move vaporMoveset[4] = {Protect, Substitute, Substitute, Substitute};
+    // Move vaporMoveset[4] = {AquaRing, Hail, Substitute, BatonPass};
     // Move infernapeMoveset[4] = {Flamethrower, Protect, Protect, Protect};
     // Move togekissMoveset[4] = {Encore, Protect, Protect, Protect};
     // Move azelfMoveset[4] = {Thunderbolt, PsychicMove, Protect, Protect};
     // Move haunterMoveset[4] = {TrickRoom, SuckerPunch, Protect, Protect};
-    cList.commands[0][0] = COMMAND_MOVE_SLOT_1; // azelf thunderbolts 
-    cList.commands[1][0] = COMMAND_SWITCH | POKE_SLOT_5; // switch to togekiss
-    cList.commands[2][0] = COMMAND_MOVE_SLOT_1; // encore
-    cList.commands[3][0] = COMMAND_SWITCH | POKE_SLOT_3; // send out hippo
-    cList.commands[4][0] = COMMAND_MOVE_SLOT_4; // stealth rock
-    cList.commands[5][0] = COMMAND_MOVE_SLOT_2; // yawn
-    cList.commands[6][0] = COMMAND_MOVE_SLOT_3; // protect
-    cList.commands[7][0] = COMMAND_SWITCH | POKE_SLOT_2; // send out vapor
-    cList.commands[8][0] = COMMAND_MOVE_SLOT_2; // substitute
-    cList.commands[9][0] = COMMAND_USE_ITEM_FULL_RESTORE | POKE_SLOT_5; // heal toge
-    cList.commands[10][0] = COMMAND_SWITCH | POKE_SLOT_5; // send out toge
-    cList.commands[11][0] = COMMAND_MOVE_SLOT_1; // encore
-    cList.commands[12][0] = COMMAND_SWITCH | POKE_SLOT_4; // send out haunter
-    cList.commands[13][0] = COMMAND_USE_ITEM_FULL_RESTORE | POKE_SLOT_3; // heal hippo
-    // cList.commands[13][0] = COMMAND_MOVE_SLOT_3; // don't heal hiippo
-
-    cList.commands[14][0] = COMMAND_MOVE_SLOT_1; // trick room
-    cList.commands[15][0] = COMMAND_SWITCH | POKE_SLOT_6; // infernape out
-    cList.commands[16][0] = COMMAND_MOVE_SLOT_2 | COMMAND_SWITCH | POKE_SLOT_3; // protect and then send out hippo
-    cList.commands[17][0] = COMMAND_MOVE_SLOT_1; // earthquake
-    cList.commands[18][0] = COMMAND_MOVE_SLOT_1 | COMMAND_SWITCH | POKE_SLOT_1; // earthquake KOs, send in azelf
-    cList.commands[19][0] = COMMAND_MOVE_SLOT_2 | COMMAND_SWITCH | POKE_SLOT_6;
-    cList.commands[20][0] = COMMAND_MOVE_SLOT_1;
-
-
+    // cList.commands[0][0] = COMMAND_MOVE_SLOT_1 | COMMAND_SWITCH | POKE_SLOT_2; // earthquake and switch to vaporeon
+    // cList.commands[1][0] = COMMAND_SWITCH | POKE_SLOT_1; // back to hippo
+    // cList.commands[2][0] = COMMAND_SWITCH | POKE_SLOT_5; // to togekiss
+    // cList.commands[3][0] = COMMAND_MOVE_SLOT_1; // encore
+    // cList.commands[4][0] = COMMAND_SWITCH | POKE_SLOT_2; // back to vapor
+    // cList.commands[5][0] = COMMAND_MOVE_SLOT_3; // substitute
+    // cList.commands[6][0] = COMMAND_MOVE_SLOT_4 | POKE_SLOT_1; // baton pass
+    // cList.commands[7][0] = COMMAND_MOVE_SLOT_1; // earthquake
+    // cList.commands[8][0] = COMMAND_MOVE_SLOT_1; // earthquake
+    // cList.commands[0][0] = COMMAND_USE_ITEM_X_ATK;
+    // cList.commands[2][0] = COMMAND_USE_ITEM_POTION;
     std::cout << "Loaded Commands" << std::endl;
     // cList.commands[1][0] = COMMAND_SWITCH_1;
     // cList.commands[2][0] = COMMAND_SWITCH_2;

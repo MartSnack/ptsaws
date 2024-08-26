@@ -116,6 +116,7 @@ bool AI_BasicRecover(BattleContext *bc, AiContext *ac);
 bool AI_BasicSandstorm(BattleContext *bc, AiContext *ac);
 bool AI_BasicSunnyDay(BattleContext *bc, AiContext *ac);
 bool AI_BasicBurn(BattleContext *bc, AiContext *ac);
+bool AI_BasicStealthRock(BattleContext *bc, AiContext *ac);
 
 bool AI_ExpertSeq(BattleContext *bc, AiContext *ac);
 bool AI_ExpertAccuracyDown(BattleContext *bc, AiContext *ac);
@@ -209,4 +210,5 @@ bool AI_ExpertSunnyDay(BattleContext *bc, AiContext *ac);
 
 bool AI_ExpertUTurn(BattleContext *bc, AiContext *ac);
 
+bool AI_ExpertStealthRock(BattleContext *bc, AiContext *ac);
 #endif /*TR_AI_H*/

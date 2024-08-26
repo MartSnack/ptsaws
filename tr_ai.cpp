@@ -57,6 +57,7 @@ bool AI_IfHasMoveEffect(BattleContext *bc, AiContext *ac, int effect, bool targe
     PokeClient pc;
     if(target) {
         pc = ac->target;
+        return false;
     } else {
         pc = ac->self;
     }
@@ -509,7 +510,14 @@ bool AI_ShouldUseItem(BattleContext *bc, AiContext *ac) {
                     command = COMMAND_USE_ITEM_HYPER_POTION;
                 }
             }
-
+            if(item == ITEM_POTION) {
+                if(ac->self.team[ac->self.battler].bVal.bHp &&
+                ac->self.team[ac->self.battler].bVal.bHp < (ac->self.team[ac->self.battler].cHp / 4) ||
+                (ac->self.team[ac->self.battler].cHp - ac->self.team[ac->self.battler].bVal.bHp) > 20 ){
+                    result = true;
+                    command = COMMAND_USE_ITEM_POTION;
+                }
+            }
             if(result == true) {
                 bc->attacker.useItems[i] = 0;
                 ac->self.command = command;
@@ -890,7 +898,22 @@ bool AI_BasicDamageStart(BattleContext *bc, AiContext *ac) {
 
     return AI_BasicDamage(bc, ac);
 }
-
+// defaults to checking the opponent's (player's) team
+int AI_CountAliveParty(BattleContext *bc, AiContext *ac, bool target = true) {
+    PokeClient pc;
+    if(target) {
+        pc = ac->target;
+    } else {
+        pc = ac->self;
+    }
+    int count = 0;
+    for(int i = 0; i < 6; i++) {
+        if(i != pc.battler && pc.team[i].bVal.bHp > 0 && pc.team[i].level > 0) {
+            count++;
+        }
+    }
+    return count;
+}
 bool AI_BasicSeq(BattleContext *bc, AiContext *ac) {
     ac->lossCalcOn = false;
     // TODO: missing horn drill and fissure calcs
@@ -940,9 +963,20 @@ bool AI_CheckEffect(BattleContext *bc, AiContext *ac) {
             return AI_BasicSunnyDay(bc, ac);
         case(BATTLE_EFFECT_STATUS_BURN):
             return AI_BasicBurn(bc, ac);
+        case(BATTLE_EFFECT_STEALTH_ROCK):
+            return AI_BasicStealthRock(bc, ac);
         default:
             return true;
     }
+}
+bool AI_BasicStealthRock(BattleContext *bc, AiContext *ac){
+    if(ac->target.sideConditions & SIDE_CONDITION_STEALTH_ROCK) {
+        return AI_DEC10(ac);
+    }
+    if(AI_CountAliveParty(bc, ac) == 0) {
+        return AI_DEC10(ac);
+    }
+    return true;
 }
 bool AI_BasicBurn(BattleContext *bc, AiContext *ac){
     AbilityId abi = AI_CheckAbility(bc, ac);
@@ -1325,9 +1359,23 @@ bool AI_ExpertSeq(BattleContext *bc, AiContext *ac) {
             return AI_ExpertUTurn(bc, ac);
         case(BATTLE_EFFECT_EVA_UP):
             return AI_ExpertEvasionUp(bc, ac);
+        case(BATTLE_EFFECT_STEALTH_ROCK):
+            return AI_ExpertStealthRock(bc, ac);
         default:
             return true;
     }
+}
+bool AI_ExpertStealthRock(BattleContext *bc, AiContext *ac){
+    if(AI_IfRndUnder(bc, 128)) {
+        return true;
+    }
+    AI_INCDEC(ac, 1); // just get a raw +1
+    if(AI_IfHasMoveEffect(bc, ac, BATTLE_EFFECT_FORCE_SWITCH)){
+        if(AI_IfRndUnder(bc, 64)) {
+            AI_INCDEC(ac, 1);
+        }
+    }
+    return true;
 }
 bool AI_ExpertUTurn(BattleContext *bc, AiContext *ac){
     AI_CheckTypeAdvantage(bc, ac);

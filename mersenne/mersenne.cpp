@@ -220,6 +220,9 @@ Seed fantinaSim(Range r) {
 
 }
 
+Seed fantinaOptimalSim(Range r) {
+    
+}
 Seed coinFlipSim(Range r) {
     Seed retSeed = {0, 0};
     int cycles;
@@ -240,6 +243,25 @@ Seed coinFlipSim(Range r) {
     return retSeed;
 
 }
+Seed coinFlipIndividual(unsigned long seed) {
+    Seed retSeed = {0, 0};
+    int cycles;
+    MTRNG_CONTEXT rngc;
+    rngc.sMTRNG_Size = 624 + 1;
+    MTRNG_SetSeed(seed, &rngc);
+    cycles = 0;
+    for(int j = 0; j < 100; j++) {
+        // flip a coin 100 times
+        if(MTRNG_Next(&rngc) & 1) {
+            std::cout << 1 << ',';
+        } else {
+            std::cout << 0 << ',';
+        }
+        // cycles = cycles + (MTRNG_Next(&rngc) & 1);
+    }
+    return retSeed;
+
+}
 void displaySeed(unsigned long i) {
     MTRNG_CONTEXT rngc;
     rngc.sMTRNG_Size = 624 + 1;
@@ -248,7 +270,8 @@ void displaySeed(unsigned long i) {
 int main()
 {
     std::cout<<"<booting>"<<std::endl;
-    displaySeed(2462131795);
+    // displaySeed(2462131795);
+    coinFlipIndividual(2462131795);
     return 0;
 
     using std::chrono::high_resolution_clock;

@@ -369,8 +369,24 @@ bool applySunnyDay(BattleContext *bc) {
     if(bc->weather & FIELD_CONDITION_SUNNY) {
         return false; // fails
     }
+    bc->weather &= ~FIELD_CONDITION_HAILING;
+    bc->weather &= ~FIELD_CONDITION_RAINING;
+    bc->weather &= ~FIELD_CONDITION_SANDSTORM;
     bc->weather = FIELD_CONDITION_SUNNY_TEMP;
     bc->weatherTurns = 5;
+    return true;
+}
+
+bool applyHail(BattleContext *bc) {
+    if(bc->weather & FIELD_CONDITION_HAILING) {
+        return false; // hail already active
+    } else {
+        bc->weather &= ~FIELD_CONDITION_SUNNY;
+        bc->weather &= ~FIELD_CONDITION_RAINING;
+        bc->weather &= ~FIELD_CONDITION_SANDSTORM;
+        bc->weather |= FIELD_CONDITION_HAILING_TEMP;
+        bc->weatherTurns = 5; // lasts 5 turns
+    }
     return true;
 }
 
@@ -402,6 +418,26 @@ bool applyTrickRoom(BattleContext *bc){
     // okay so trick room seems to advance the rng 4? Maybe the game is recalculating the speed rands
     return true;
 }
+bool applyBatonPass(BattleContext *bc) {
+    int switchnum = getSwitchNum(bc->attacker.command & POKE_SLOTS);
+    int currentSubHealth = bc->attacker.team[bc->attacker.battler].bVal.substituteHp;
+    int currentMoveMask = bc->attacker.team[bc->attacker.battler].bVal.moveEffectsMask;
+    if(bc->attacker.team[switchnum].bVal.bHp > 0) {
+        bc->attacker.pokeSwitch(switchnum);
+        bc->attacker.team[bc->attacker.battler].bVal.substituteHp = currentSubHealth;
+        bc->attacker.team[bc->attacker.battler].bVal.moveEffectsMask = currentMoveMask;
+        return true;
+    }
+
+    return false;
+}
+bool applyAquaRing(BattleContext *bc) {
+    if(bc->attacker.team[bc->attacker.battler].bVal.moveEffectsMask & MOVE_EFFECT_AQUA_RING) {
+        return false; // already active
+    }
+    bc->attacker.team[bc->attacker.battler].bVal.moveEffectsMask |= MOVE_EFFECT_AQUA_RING;
+    return true;
+}
 bool applyEffect(Move move, BattleContext *bc) {
     // gigantic switch/case lol
     switch(move.effect) {
@@ -427,6 +463,8 @@ bool applyEffect(Move move, BattleContext *bc) {
             return modifyStat(false, Stat::DEFENSE, -1, bc);
         case BATTLE_EFFECT_ATK_DOWN_2:
             return modifyStat(false, Stat::ATTACK, -2, bc);
+        case BATTLE_EFFECT_ATK_DOWN:
+            return modifyStat(false, Stat::ATTACK, -1, bc);
         case BATTLE_EFFECT_DEF_DOWN_2:
             return modifyStat(false, Stat::DEFENSE, -2, bc);
         case BATTLE_EFFECT_ACC_DOWN:
@@ -491,12 +529,18 @@ bool applyEffect(Move move, BattleContext *bc) {
             return applySandstorm(bc);
         case BATTLE_EFFECT_WEATHER_SUN:
             return applySunnyDay(bc);
+        case BATTLE_EFFECT_WEATHER_HAIL:
+            return applyHail(bc);
         case BATTLE_EFFECT_STEALTH_ROCK:
             return applyStealthRock(bc);
         case BATTLE_EFFECT_ENCORE:
             return applyEncore(bc);
         case BATTLE_EFFECT_TRICK_ROOM:
             return applyTrickRoom(bc);
+        case BATTLE_EFFECT_PASS_STATS_AND_STATUS:
+            return applyBatonPass(bc);
+        case BATTLE_EFFECT_RESTORE_HP_EVERY_TURN:
+            return applyAquaRing(bc);
         default:
             return false;
     }

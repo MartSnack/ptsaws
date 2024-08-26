@@ -61,6 +61,11 @@ Nature sassy = {100,100,100,110,90};
 Nature careful = {100,100,90,110,100};
 
 std::map<Mons, PokeInfo> pokemap = {
+    {CHIMCHAR, PokeInfo("Chimchar", 44,58,44,58,44,61,Type::Fire,Type::None,BLAZE)},
+    {ONIX, PokeInfo("Onix", 35,45,160,30,45,70,Type::Rock,Type::Ground,ROCK_HEAD)},
+    {GEODUDE, PokeInfo("Geodude", 40,80,100,30,30,20,Type::Rock,Type::Ground,ROCK_HEAD)},
+    {CRANIDOS, PokeInfo("Cranidos", 67,125,40,30,30,58,Type::Rock,Type::Rock,MOLD_BREAKER)},
+
     {MONFERNO, PokeInfo("Monferno", 64,78,52,78,52,81,Type::Fire,Type::Fighting,BLAZE)},
     {SKUNTANK, PokeInfo("Skuntank", 103,93,67,71,61,84,Type::Poison, Type::Dark, STENCH, AFTERMATH)},
     {ZUBAT, PokeInfo("Zubat", 40,45,35,30,40,55,Type::Poison,Type::Flying,INNER_FOCUS)},
@@ -211,6 +216,61 @@ void setupClient(PokeClient *pc) {
 // }
 
 // clients 
+PokeClient getChimcharClient() {
+    PokeClient p1;
+    Move moveset1[4] = {Return, Return, Return, Return};
+    Pokemon chimchar = Pokemon(9, hasty, 0, CHIMCHAR, moveset1);
+    chimchar.setEvs(4,0,0,0,0,0);
+    chimchar.calcStats();
+    p1.battler = 0;
+    p1.aiControl = false;
+    p1.team[0] = chimchar;
+    p1.name = "Player";
+    return p1;
+}
+PokeClient getTristanClient() {
+    PokeClient p2;
+    Move moveset2[4] = {Tackle, Growl, QuickAttack, Empty};
+    Pokemon stara = Pokemon(5, careful, 0, STARLY, moveset2);
+    p2.aiControl = true;
+    p2.aiLevel = 1;
+    p2.battler = 0;
+    p2.team[0] = stara;
+    p2.name = "WildStarly";
+    return p2;
+}
+PokeClient getRoarkClient() {
+    PokeClient p2;
+    Move moveset[4] = {StealthRock, RockThrow, Empty, Empty};
+    Move moveset2[4] = {StealthRock, RockThrow, Screech, Empty};
+    Move moveset3[4] = {Headbutt, Headbutt, Headbutt, Headbutt};
+    Pokemon geodude = Pokemon(12, lax, 6, GEODUDE, moveset);
+    Pokemon onix = Pokemon(12, bold, 6, ONIX, moveset2);
+    Pokemon cranidos = Pokemon(14, jolly, 6, CRANIDOS, moveset3);
+    p2.aiControl = true;
+    p2.aiLevel = 7;
+    p2.battler = 0;
+    p2.team[0] = geodude;
+    p2.team[1] = onix;
+    p2.team[2] = cranidos;
+    p2.useItems[0] = ITEM_POTION;
+    p2.useItems[1] = ITEM_POTION;
+    p2.numUseItems = 2;
+    p2.name = "AI";
+    return p2;
+}
+PokeClient getMonfernoRoarkClient() {
+    PokeClient p1;
+    Move moveset1[4] = {MachPunch, MachPunch, Taunt, Tackle};	
+    Pokemon monferno = Pokemon(18, calm, 0, MONFERNO, moveset1);
+    monferno.setEvs(0,0,0,0,0,0);
+    monferno.calcStats(); // recalc stats after setting evs
+    p1.battler = 0;
+    p1.aiControl = false;
+    p1.team[0] = monferno;
+    p1.name = "Player";
+    return p1;
+}
 PokeClient getMonfernoEternaClient() {
     PokeClient p1;
     Move moveset1[4] = {Tackle, FlameWheel, Taunt, Tackle};	
@@ -463,7 +523,33 @@ PokeClient getAIAaronClient() {
     p2.aiControl = true;
     return p2;
 }
-
+PokeClient getAIFlintClient() {
+    PokeClient p2;
+    Move moveset[4] = {Flamethrower, SludgeBomb, DarkPulse, SunnyDay};
+    Move moveset2[4] = {Overheat, GigaImpact, QuickAttack, WillOWisp};
+    Move moveset3[4] = {FlareBlitz, Solarbeam, Bounce, SunnyDay};
+    Move moveset4[4] = {FlareBlitz, ThunderPunch, MachPunch, Earthquake};
+    Move moveset5[4] = {Flamethrower, Thunderbolt, Solarbeam, HyperBeam};
+    Pokemon houndoom = Pokemon(52, relaxed, 30, HOUNDOOM, moveset);
+    Pokemon flareon = Pokemon(55, quirky, 30, FLAREON, moveset2);
+    Pokemon rapidash = Pokemon(53, docile, 30, RAPIDASH, moveset3);
+    Pokemon infernape = Pokemon(55, bold, 30, INFERNAPE, moveset4);
+    Pokemon magmortar = Pokemon(57, gentle, 30, MAGMORTAR, moveset5);
+    magmortar.bVal.item = ITEM_SITRUS_BERRY;
+    p2.useItems[0] = ITEM_FULL_RESTORE;
+    p2.useItems[1] = ITEM_FULL_RESTORE;
+    p2.numUseItems = 2;
+    p2.name = "Flint";
+    p2.team[0] = houndoom;
+    p2.team[1] = flareon;
+    p2.team[2] = rapidash;
+    p2.team[3] = infernape;
+    p2.team[4] = magmortar;
+    p2.aiLevel = 7;
+    p2.battler = 0;
+    p2.aiControl = true;
+    return p2;
+}
 PokeClient getPlayerAaronClient() {
     PokeClient p1;
     Move hippoMoveset[4] = {Earthquake, Yawn, Protect, StealthRock};
@@ -499,6 +585,46 @@ PokeClient getPlayerAaronClient() {
     p1.team[0] = azelf;
     p1.team[1] = vapor;
     p1.team[2] = hippo;
+    p1.team[3] = haunter;
+    p1.team[4] = togekiss;
+    p1.team[5] = infernape;
+    p1.battler = 0;
+    p1.aiControl = false;
+    return p1;
+
+}
+PokeClient getPlayerFlintClient() {
+    PokeClient p1;
+    Move hippoMoveset[4] = {Earthquake, Yawn, Protect, StealthRock};
+    Move vaporMoveset[4] = {AquaRing, Hail, Substitute, BatonPass};
+    Move infernapeMoveset[4] = {Flamethrower, Protect, Protect, Protect};
+    Move togekissMoveset[4] = {Encore, Protect, Protect, Protect};
+    Move azelfMoveset[4] = {Thunderbolt, PsychicMove, Protect, Protect};
+    Move haunterMoveset[4] = {TrickRoom, SuckerPunch, Protect, Protect};
+
+    Pokemon vapor = Pokemon(50, lonely, 0, VAPOREON, vaporMoveset);
+    vapor.setEvs(100, 0, 100, 0, 0, 252);
+    vapor.calcStats();
+    Pokemon togekiss = Pokemon(52, lonely, 0, TOGEKISS, togekissMoveset);
+    togekiss.setEvs(22, 0, 100, 0, 0, 100);
+    togekiss.calcStats();
+    Pokemon hippo = Pokemon(52, modest, 0, HIPPOWDON, hippoMoveset);
+    hippo.setEvs(10, 66, 220, 0, 44, 60);
+    hippo.calcStats();
+    Pokemon haunter = Pokemon(48, lonely, 0, HAUNTER, haunterMoveset);
+    Pokemon infernape = Pokemon(51, timid, 0, INFERNAPE, infernapeMoveset);
+    infernape.setEvs(60, 0, 12, 0, 0, 0);
+    infernape.calcStats();
+    Pokemon azelf = Pokemon(51, impish, 0, AZELF, azelfMoveset);
+    azelf.setEvs(0, 0, 0, 216, 0, 100);
+    azelf.calcStats();
+    hippo.bVal.item = ITEM_BOOST_GROUND;
+    vapor.bVal.item = ITEM_RAWST_BERRY;
+    // hippo.bVal.item = ITEM_BOOST_GROUND;
+    p1.name = "Player";
+    p1.team[0] = hippo;
+    p1.team[1] = vapor;
+    p1.team[2] = azelf;
     p1.team[3] = haunter;
     p1.team[4] = togekiss;
     p1.team[5] = infernape;
@@ -544,8 +670,8 @@ BattleContext setupJupiterFight(unsigned long startingSeed) {
     return bc;
 }
 BattleContext setupVarFight(unsigned long startingSeed) {
-    PokeClient p1 = getPlayerAaronClient();
-    PokeClient p2 = getAIAaronClient();
+    PokeClient p1 = getChimcharClient();
+    PokeClient p2 = getTristanClient();
     p1.pokeSwitch(p1.battler);
     p2.pokeSwitch(p2.battler);
     // p1.team[p1.battler].bVal.evaStg = 12;

@@ -44,6 +44,10 @@ enum class DamageType:int {
 enum class MoveId {
     NO_MOVE,
     STRUGGLE,
+    RETURN,
+    ROCK_THROW,
+    HEADBUTT,
+    GROWL,
     FLAME_WHEEL,
     NIGHT_SLASH,
     TAUNT,
@@ -152,6 +156,9 @@ enum class MoveId {
     ENCORE,
     PSYCHIC,
     TRICK_ROOM,
+    HAIL,
+    BATON_PASS,
+    AQUA_RING,
 };
 struct Move {
         MoveId id;
@@ -175,6 +182,10 @@ struct Move {
 extern Move Empty;
 extern Move Struggle;
 extern Move Tackle;
+extern Move Return;
+extern Move Growl;
+extern Move RockThrow;
+extern Move Headbutt;
 extern Move FlameWheel;
 extern Move Taunt;
 extern Move NightSlash;
@@ -283,4 +294,7 @@ extern Move StealthRock;
 extern Move Encore;
 extern Move PsychicMove;
 extern Move TrickRoom;
+extern Move Hail;
+extern Move BatonPass;
+extern Move AquaRing;
 #endif /* MOVES_H_ */

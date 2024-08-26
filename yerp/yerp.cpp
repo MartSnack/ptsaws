@@ -1,11 +1,18 @@
 #include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
+#include <fstream>
+#include <sstream>
 #include <future>
 #include <vector>
 #include <thread>
 #include <chrono>
+#include <filesystem>
+#include <iomanip>
 #include <string>
+#include <atomic>
+#include <experimental/filesystem>
+namespace fs = std::filesystem;
 struct Foo {
     unsigned long seed;
     unsigned short result;
@@ -41,7 +48,13 @@ struct WanderMatrix {
     int startX;
     int startY;
 };
-int seedCounts[800];
+// int seedCounts[800];
+std::vector<std::atomic<int>> seedCounts(3500);
+
+void threadFunction(std::vector<std::atomic<int>>& seedCounts, int index) {
+    // Atomic increment
+    seedCounts[index]++;
+}
 
 Foo advanceSeed(unsigned long seed){
     seed = (1103515245 * seed + 24691) & 0xFFFFFFFF;
@@ -63,7 +76,7 @@ DmgCalc getDmgRoll(Foo value) {
 BiggerSeed getFastestFriends(Range r){
     BiggerSeed worstSeed = {0,0};
     worstSeed.lowest = 0;
-    int friendshipMax = 220;
+    int friendshipMax = 255;
     int currentFriendship = 70;
     int walkCycles = 0;
     Foo value = {0,0};
@@ -72,7 +85,7 @@ BiggerSeed getFastestFriends(Range r){
         seed = i;
         currentFriendship = 0;
         walkCycles = 0;
-        while(walkCycles < 179){
+        while(currentFriendship < 255){
             walkCycles = walkCycles + 1;
             value = advanceSeed(seed);
             seed = value.seed;
@@ -80,11 +93,11 @@ BiggerSeed getFastestFriends(Range r){
                 currentFriendship = currentFriendship + 1;
             }
         }
-        if(currentFriendship > worstSeed.lowest){
-            worstSeed.lowest = currentFriendship;
-            worstSeed = {currentFriendship, i};
+        if(walkCycles > worstSeed.highest){
+            worstSeed.highest = walkCycles;
+            worstSeed.highestSeed = i;
         }
-        seedCounts[currentFriendship] = seedCounts[currentFriendship] + 1; 
+        seedCounts[walkCycles] = seedCounts[walkCycles] + 1; 
     }
     return worstSeed;
 }
@@ -382,6 +395,8 @@ BiggerSeed getWildSpin(Range r) {
             worstSeed.highest = cycles;
             worstSeed.highestSeed = i;
         }
+        seedCounts[cycles] = seedCounts[cycles] + 1; 
+
     }
     return worstSeed;
 }
@@ -389,8 +404,8 @@ BiggerSeed getWildRepelEncounter(Range r) {
     BiggerSeed worstSeed = {0, 0, 0, 0};
     unsigned long seed = 0;
     Foo value = {0,0};
-    int encRate = 10; // ravaged path // grass is 30
-    int moveRate = 40; // walking (spinning)
+    int encRate = 30; // ravaged path // grass is 30
+    int moveRate = 30; // walking (spinning)
     int maxSteps =  8 - ((encRate << 8) / 2560);
     int totalXp = 0;
     int totalEv = 0;
@@ -404,7 +419,7 @@ BiggerSeed getWildRepelEncounter(Range r) {
     unsigned long pidBottom = 0;
     unsigned long pid = 0;
     // int xpSlots[12] = {30, 45, 38, 57, 23, 23, 68, 46, 46, 46, 46, 46}; // ravaged path
-    int xpSlots[12] = {0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 0};  // set xpslot with correct level mon to 1, others to 0
+    int xpSlots[12] = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};  // set xpslot with correct level mon to 1, others to 0
     int evSlots[12] = {0,1,0,1,0,1,0,1,0,1,0,1}; 
     for(unsigned long i = r.start; i < r.stop; i++){
         seed = i;
@@ -453,14 +468,14 @@ BiggerSeed getWildRepelEncounter(Range r) {
                             slot = 11;
                         }
 
-                                                
+                        // temp code
+                        foundMon = true;
                         if(xpSlots[slot] > 0) {
-                            foundMon = true;
+                            // foundMon = true;
+                        } else {
+                            totalSteps = 999;
                         }
                         if(foundMon) {
-                            if(slot == 7){
-                                totalSteps = 0; // found an onix instead
-                            }
                             value = advanceSeed(value.seed);
                             nature = value.result / 0xA3E; // 0-24
                             loop = true;
@@ -501,6 +516,8 @@ BiggerSeed getWildRepelEncounter(Range r) {
             value= advanceSeed(value.seed);
 
         }
+        threadFunction(seedCounts, totalSteps);
+
         if(totalSteps > worstSeed.highest | worstSeed.highest == 0){
             worstSeed.highest = totalSteps;
             worstSeed.highestSeed = i;
@@ -648,11 +665,12 @@ BiggerSeed getWildXp(Range r) {
     BiggerSeed worstSeed = {0, 0, 0, 0};
     unsigned long seed = 0;
     Foo value = {0,0};
-    int encRate = 10; // ravaged path // grass is 30
-    int moveRate = 40; // walking (spinning)
-    int maxSteps = 5;
+    int encRate = 30; // ravaged path // grass is 30
+    int moveRate = 30; // walking (spinning)
+    int maxSteps =  8 - ((encRate << 8) / 2560);
     int totalXp = 0;
     int totalEv = 0;
+    int totalSteps = 0;
     int battles = 0;
     int stepCounter = 0;
     int slot = 0;
@@ -662,9 +680,9 @@ BiggerSeed getWildXp(Range r) {
     unsigned long pidBottom = 0;
     unsigned long pid = 0;
     // int xpSlots[12] = {30, 45, 38, 57, 23, 23, 68, 46, 46, 46, 46, 46}; // ravaged path
-    // int xpSlots[12] = {16, 16, 24, 24, 24, 24, 32, 33, 32, 33, 32, 33}; // lake verity
+    int xpSlots[12] = {16, 16, 24, 24, 24, 24, 32, 33, 32, 33, 32, 33}; // lake verity
     // int xpSlots[12] = {95, 101, 95, 101, 108, 115, 108, 115, 115, 115, 115, 115}; // old chat
-    int xpSlots[12] = {119, 114, 109, 119, 119, 119, 119, 119, 119, 149, 119, 162}; // maniac cave
+    // int xpSlots[12] = {119, 114, 109, 119, 119, 119, 119, 119, 119, 149, 119, 162}; // maniac cave
 
     // int evSlots[12] = {0,1,0,1,0,1,0,1,0,1,0,1}; // lake verity
         int evSlots[12] = {1,1,1,1,1,1,1,1,1,1,1,1}; // lake verity
@@ -674,10 +692,11 @@ BiggerSeed getWildXp(Range r) {
         totalEv = 0;
         battles = 0;
         stepCounter = 0;
+        totalSteps = 0;
         value = advanceSeed(seed);
         slot = 0;
         nature = 0;
-        while(battles < 1) {
+        while(battles < 100) {
             if(stepCounter >= maxSteps | value.result/0x290 < 5){
                 if(stepCounter < maxSteps){
                     value = advanceSeed(value.seed);
@@ -730,8 +749,6 @@ BiggerSeed getWildXp(Range r) {
                     value = advanceSeed(value.seed); // iv2
                     value = advanceSeed(value.seed);
                     value = advanceSeed(value.seed);
-                    std::cout << value.seed << std::endl;
-                    std::cout << i << std::endl;
                     stepCounter = -1;
                     battles++;
                     totalXp = totalXp + xpSlots[slot];
@@ -742,9 +759,11 @@ BiggerSeed getWildXp(Range r) {
                 }
             }
             stepCounter++;
+            totalSteps++;
             value= advanceSeed(value.seed);
 
         }
+        threadFunction(seedCounts, totalXp);
         if(totalXp > worstSeed.highest | worstSeed.highest == 0){
             worstSeed.highest = totalXp;
             worstSeed.highestSeed = i;
@@ -761,7 +780,6 @@ BiggerSeed getWildXp(Range r) {
             worstSeed.lowestSeed2 = i;
         }
     }
-    std::cout<< worstSeed.highest <<std::endl;
 
     return worstSeed;
 }
@@ -938,11 +956,11 @@ BiggerSeed getShiny(Range r) {
     BiggerSeed worstSeed = {0, 0, 0, 0};
     unsigned long seed = 0;
     Foo value = {0,0};
-    int encRate = 10; // ravaged path // grass is 30
-    int moveRate = 30; // walking (spinning)
+    int encRate = 30; // ravaged path // grass is 30
+    int moveRate = 40; // walking (spinning)
     int maxSteps =  8 - ((encRate << 8) / 2560);
-    int sid = 63631;
-    int tid = 10064;
+    int sid = 18422;
+    int tid = 38945;
     int battles = 0;
     int stepCounter = 0;
     int slot = 0;
@@ -1015,7 +1033,7 @@ BiggerSeed getShiny(Range r) {
                         }
                     }
                     if((tid ^ sid ^ pidTopOriginal ^ pidBottom) < 8) {
-                        if(slot==11) {
+                        if(slot==0) {
                             shinyCount++;
                         }
                     }
@@ -1149,7 +1167,7 @@ int main()
     // std::cout << ss.highestSeed << std::endl;
     // return 0;
 
-    for(int i = 0; i < 800; i++){
+    for(int i = 0; i < 3500; i++){
         seedCounts[i] = 0;
     }
     using std::chrono::high_resolution_clock;
@@ -1157,9 +1175,13 @@ int main()
     using std::chrono::duration;
     using std::chrono::milliseconds;
     auto t1 = high_resolution_clock::now();
+    std::string dirName = "./simulationResults/yerp";
+    std::string resultsFilename = dirName + "/simulationResults.txt";
+    fs::create_directories(dirName);
+    std::ofstream resultsFile(resultsFilename);
     // unsigned long end = 4294967294UL;
-    // unsigned long end = 169496720UL;
-    unsigned long end = 2097152UL;
+    // unsigned long end = 1073741824UL;
+    unsigned long end = 131072UL;
     int divisor = 16; // how many chunks to use
     unsigned long neow = end/divisor;
     BiggerSeed max = {0,0};
@@ -1174,7 +1196,7 @@ int main()
     // bigger seed for high/low stuff
     std::vector<std::future<BiggerSeed>> futures;
     for(auto &e : ranges){
-        futures.push_back(std::async(getWildXpSweetScent, e));
+        futures.push_back(std::async(getWildXp, e));
     }
     //retrive and print the value stored in the future
     for(auto &e : futures) {
@@ -1195,13 +1217,13 @@ int main()
             min2 = val;
         }
     }
-    std::cout << "______" << std::endl;
-    std::cout << "highest cycles: " << max.highest << std::endl;
-    std::cout << "starting seed: "<<max.highestSeed << std::endl;
-    std::cout << "lowest cycles: " << min.lowest << std::endl;
-    std::cout << "starting seed: "<< min.lowestSeed << std::endl;
-    std::cout << "highest2 cycles: " << max2.highest2 << "  starting seed: "<<max2.highestSeed2 << std::endl;
-    std::cout << "lowest2 cycles: " << min2.lowest2 << "  starting seed: "<< min2.lowestSeed2 << std::endl;
+    resultsFile << "______" << std::endl;
+    resultsFile << "highest cycles: " << max.highest << std::endl;
+    resultsFile << "starting seed: "<<max.highestSeed << std::endl;
+    resultsFile << "lowest cycles: " << min.lowest << std::endl;
+    resultsFile << "starting seed: "<< min.lowestSeed << std::endl;
+    resultsFile << "highest2 cycles: " << max2.highest2 << "  starting seed: "<<max2.highestSeed2 << std::endl;
+    resultsFile << "lowest2 cycles: " << min2.lowest2 << "  starting seed: "<< min2.lowestSeed2 << std::endl;
     auto t2 = high_resolution_clock::now();
      /* Getting number of milliseconds as an integer. */
     auto ms_int = duration_cast<milliseconds>(t2 - t1);
@@ -1209,14 +1231,27 @@ int main()
     /* Getting number of milliseconds as a double. */
     duration<double, std::milli> ms_double = t2 - t1;
 
-    std::cout << ms_int.count() << "ms\n";
-    std::cout << ms_double.count() << "ms\n";
-    for(int i = 0; i < 800; i++){
+    resultsFile << ms_int.count() << "ms\n";
+    resultsFile << ms_double.count() << "ms\n";
+    int totalCount = 0;
+    int unlock = 0;
+    for(int i = 0; i < 3500; i++){
         int val = seedCounts[i];
-        if(val > 0){
-            std::cout << i << ": " << seedCounts[i] << "\n";
+        totalCount = totalCount + val;
+        if(val > 0) {
+            unlock = 1;
         }
+        if(unlock > 0) {
+            resultsFile << seedCounts[i] << ", ";
+        }
+
+        // if(val > 0){
+        //     // std::cout << seedCounts[i] << ", ";
+        //     std::cout << i << ": " << seedCounts[i] << "\n";
+        // }
     }
+    std::cout << totalCount << std::endl;
+    resultsFile.close();
     return 0;
 
 }

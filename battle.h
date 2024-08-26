@@ -37,6 +37,8 @@
 #define COMMAND_USE_ITEM_X_SPEED 1 << 16
 #define COMMAND_USE_ITEM_ANTIDOTE 1 << 17
 #define COMMAND_USE_ITEM_FULL_RESTORE 1 << 18
+#define COMMAND_USE_ITEM_POTION 1 << 23
+#define COMMAND_USE_ITEM_X_ATK 1 << 24
 #define COMMAND_USE_ITEM ( COMMAND_USE_ITEM_SUPER_POTION \
                          | COMMAND_USE_ITEM_GUARD_SPEC \
                          | COMMAND_USE_ITEM_HYPER_POTION \
@@ -45,13 +47,16 @@
                          | COMMAND_USE_ITEM_X_ACCURACY \
                          | COMMAND_USE_ITEM_X_SPEED \
                          | COMMAND_USE_ITEM_ANTIDOTE \
-                         | COMMAND_USE_ITEM_FULL_RESTORE)
+                         | COMMAND_USE_ITEM_FULL_RESTORE\
+                         | COMMAND_USE_ITEM_POTION \
+                         | COMMAND_USE_ITEM_X_ATK)
 #define COMMAND_SWITCH 1 << 19
 
 
 #define COMMAND_BRANCH_INC 1 << 20
 #define COMMAND_BRANCH_DEC 1 << 21
 #define COMMAND_BRANCH_IF_KO 1 << 22
+
 // option selects
 #define COMMAND_USE_GATEAU_OR_BITE 1 << 27
 #define COMMAND_USE_HYPER_OR_BITE 1 << 28
@@ -80,6 +85,7 @@ void updateFlagsWhenHit(BattleContext *bc, Move move);
 void heal(Pokemon *p, int amount);
 int calcTypeMultiplier(Type attack, Type defend1, Type defend2);
 int getSwitchNum(unsigned long command);
+bool activateTriggers(BattleContext *bc, bool doAttacker);
 
 enum class FieldCondition {
     NONE,

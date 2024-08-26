@@ -26,6 +26,7 @@
 #define ITEM_POWER_HERB 15
 #define ITEM_BOOST_ELECTRIC 16
 #define ITEM_BOOST_GROUND 17
+#define ITEM_POTION 18
 
 // int calcDamage(Pokemon attacker, Pokemon defender, Move move, int crit = 1, int randomRoll = 100);
 
@@ -130,7 +131,11 @@ enum NatureId {
     QUIRKY
 };
 enum Mons {
+    CHIMCHAR,
     MONFERNO,
+    ONIX,
+    GEODUDE,
+    CRANIDOS,
     SKUNTANK,
     ZUBAT,
     STARAVIA,

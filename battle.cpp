@@ -143,7 +143,12 @@ bool determineOrder(BattleContext *bc) {
         if(speed1 > speed2) {
             attackerGoesFirst = true;
         } else {
-            attackerGoesFirst = false; //TODO - Handle speed ties
+            if(speed1 == speed2) {
+                attackerGoesFirst = advanceSeed(bc) % 2 == 0;
+            } else {
+                attackerGoesFirst = false; //TODO - Handle speed ties
+
+            }
         }
         if(bc->weather & FIELD_CONDITION_TRICK_ROOM) {
             attackerGoesFirst = !attackerGoesFirst; // reverso
@@ -311,11 +316,14 @@ int calcDamage(BattleContext *bc, Move move, int crit, int randomRoll, bool hurt
     if((attacker.team[attacker.battler].bVal.condition & MON_CONDITION_BURN) && move.attack == DamageType::PHYSICAL) {
         powerResult = powerResult/2;
     }
+    if(move.moveType == Type::Fire && bc->weather & FIELD_CONDITION_SUNNY) {
+        powerResult = powerResult * 150 / 100;
+    }
     powerResult = powerResult + 2;
     powerResult = powerResult * crit; // should be 2 if we critted :A
     powerResult = powerResult * (100 - randomRoll) / 100;
     int moveStatus = 0;
-    powerResult = getTypeMultiplier(&bc->attacker, &bc->defender, move, powerResult, &moveStatus);
+    powerResult = getTypeMultiplier(&attacker, &defender, move, powerResult, &moveStatus);
     return powerResult;
 };
 bool rollAccuracy(Move move, BattleContext *bc) {
@@ -450,7 +458,8 @@ bool useMove(Move move, BattleContext *bc) {
         std::cout << "Battler " << logName(bc->attacker.team[bc->attacker.battler]) << " uses " << move.name << std::endl;
     }
     bool success = false;
-    if(preMove(move, bc)){
+    if(preMove(move, bc) && !bc->attacker.team[bc->attacker.battler].bVal.isCharging){
+
         int crit = 15;
         int dmgRoll = 15;
         int dmg = 0;
@@ -545,7 +554,10 @@ bool useMove(Move move, BattleContext *bc) {
         } else {
             log("\tMove Missed");
         }
-    } 
+    }
+    if(bc->attacker.team[bc->attacker.battler].bVal.isCharging) {
+        success = true; // we're charging
+    }
     if(!success) {
         log("\tMove Failed");
     }
@@ -576,6 +588,14 @@ bool useItem(BattleContext *bc, int item) {
         log(bc->attacker.name + " uses Super Potion");
         if(bc->attacker.team[index].bVal.bHp < bc->attacker.team[index].cHp) {
             heal(&bc->attacker.team[index], 50);
+            return true;
+        } else {
+            return false;
+        }
+    } else if(item & COMMAND_USE_ITEM_POTION) {
+        log(bc->attacker.name + " uses Potion");
+        if(bc->attacker.team[index].bVal.bHp < bc->attacker.team[index].cHp) {
+            heal(&bc->attacker.team[index], 20);
             return true;
         } else {
             return false;
@@ -611,6 +631,9 @@ bool useItem(BattleContext *bc, int item) {
     } else if(item & COMMAND_USE_ITEM_X_SPEED) {
         log(bc->attacker.name + " uses X Speed");
         modifyStat(true, Stat::SPEED, 1, bc);
+    } else if(item & COMMAND_USE_ITEM_X_ATK) {
+        log(bc->attacker.name + " uses X ATK");
+        modifyStat(true, Stat::ATTACK, 1, bc);
     } else if(item & COMMAND_USE_ITEM_ANTIDOTE) {
         log(bc->attacker.name + " uses Antidote");
         if(bc->attacker.team[index].bVal.condition & MON_CONDITION_ANY_POISON) {
@@ -746,7 +769,9 @@ void executeCommand(BattleContext *bc) {
 
             }
         }
-        bc->attacker.command &= ~COMMAND_MOVE; // remove command move 
+        if(!bc->attacker.team[bc->attacker.battler].bVal.isCharging) {
+            bc->attacker.command &= ~COMMAND_MOVE; // remove command move 
+        }
 
     } else if(command & COMMAND_USE_ITEM) {
         bc->attacker.previouslySelectedMove = Empty;
@@ -815,7 +840,7 @@ void triggerGlobalEndTurnConditions(BattleContext *bc) {
             bc->weather = 0;
             bc->weatherTurns = 0;
         } else {
-            log("\tThe sunglight is strong");
+            log("\tThe sunlight is strong");
         }
     }
     if(bc->weather & FIELD_CONDITION_HAILING) {
@@ -879,7 +904,10 @@ void triggerEndTurnConditions(PokeClient *p, BattleContext *bc) {
     }
 
     // REGULAR CONDITIONS //
-
+    if(p->team[p->battler].bVal.moveEffectsMask & MOVE_EFFECT_AQUA_RING && p->team[p->battler].bVal.bHp) {
+        int healAmount = p->team[p->battler].cHp/16;
+        heal(&p->team[p->battler], healAmount);
+    }
     if((p->team[p->battler].bVal.condition & MON_CONDITION_POISON) && p->team[p->battler].bVal.bHp) {
         int psnDmg = p->team[p->battler].cHp/8;
         if(DEBUG) {
@@ -962,6 +990,9 @@ bool activateTriggers(BattleContext *bc, bool doAttacker) {
         }
     }
     if(applyClient->triggers & TRIGGER_SAND_STREAM) {
+        bc->weather &= ~FIELD_CONDITION_SUNNY;
+        bc->weather &= ~FIELD_CONDITION_HAILING;
+        bc->weather &= ~FIELD_CONDITION_RAINING;
         bc->weather |= FIELD_CONDITION_SANDSTORM_PERM;
         bc->weatherTurns = 100;
         log("Sand stream whips up a sandstorm");
@@ -1082,8 +1113,10 @@ bool endOfTurn(BattleContext *bc) {
                 bc->branch++;
             }
             // im tired
+        } else {
+            advanceSeed(bc, "Unknown, defender isn't dead");
         }
-        advanceSeed(bc, "Unknown, defender isn't dead");
+
         triggerEndTurnConditions(&bc->defender, bc);
         triggerEndTurnConditions(&bc->attacker, bc);
         if(bc->defender.team[bc->defender.battler].bVal.bHp <= 0) {
@@ -1118,17 +1151,19 @@ bool endOfTurn(BattleContext *bc) {
             // }
             if(shouldContinue) {
                 // do not do AI section if we are in the middle of a charge move
+                log("before AI starts >> RNG advances 4");
+                advanceSeed(bc);
+                advanceSeed(bc); // ai advances the seed 4 for some reason we don't know yet
+                activateTriggers(bc, true); // attacker effects
+                activateTriggers(bc, false); // defender effects
                 if(bc->defender.aiControl && bc->defender.team[bc->defender.battler].bVal.isCharging) {
                     return true;
                 }
                 if(bc->attacker.aiControl && bc->attacker.team[bc->attacker.battler].bVal.isCharging) {
                     return true;
                 }
-                log("before AI starts >> RNG advances 4");
-                advanceSeed(bc);
-                advanceSeed(bc); // ai advances the seed 4 for some reason we don't know yet
-                activateTriggers(bc, true); // attacker effects
-                activateTriggers(bc, false); // defender effects
+
+
                 processAI(bc);
                 return true;
             } else {

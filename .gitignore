@@ -36,3 +36,6 @@
 
 simulationResults/**/*.csv
 simulationResults/**/*.txt
+
+yerp/simulationResults/**/*.csv
+yerp/simulationResults/**/*.txt
