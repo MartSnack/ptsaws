@@ -1179,9 +1179,9 @@ int main()
     std::string resultsFilename = dirName + "/simulationResults.txt";
     fs::create_directories(dirName);
     std::ofstream resultsFile(resultsFilename);
-    // unsigned long end = 4294967294UL;
+    unsigned long end = 4294967294UL;
     // unsigned long end = 1073741824UL;
-    unsigned long end = 131072UL;
+    // unsigned long end = 131072UL;
     int divisor = 16; // how many chunks to use
     unsigned long neow = end/divisor;
     BiggerSeed max = {0,0};
