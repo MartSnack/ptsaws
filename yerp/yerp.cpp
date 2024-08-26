@@ -1182,7 +1182,7 @@ int main()
     unsigned long end = 4294967294UL;
     // unsigned long end = 1073741824UL;
     // unsigned long end = 131072UL;
-    int divisor = 16; // how many chunks to use
+    int divisor = 64; // how many chunks to use
     unsigned long neow = end/divisor;
     BiggerSeed max = {0,0};
     BiggerSeed min = {0,0};
