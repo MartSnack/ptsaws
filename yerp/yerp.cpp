@@ -1175,14 +1175,14 @@ int main()
     using std::chrono::duration;
     using std::chrono::milliseconds;
     auto t1 = high_resolution_clock::now();
-    std::string dirName = "./simulationResults/yerp";
+    std::string dirName = "./simulationResults";
     std::string resultsFilename = dirName + "/simulationResults.txt";
     fs::create_directories(dirName);
     std::ofstream resultsFile(resultsFilename);
     unsigned long end = 4294967294UL;
     // unsigned long end = 1073741824UL;
     // unsigned long end = 131072UL;
-    int divisor = 64; // how many chunks to use
+    int divisor = 128; // how many chunks to use
     unsigned long neow = end/divisor;
     BiggerSeed max = {0,0};
     BiggerSeed min = {0,0};
