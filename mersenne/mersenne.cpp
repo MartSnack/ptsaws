@@ -5,9 +5,11 @@
 #include <stdlib.h>
 #include <future>
 #include <vector>
+#include <atomic>
 #include <thread>
 #include <chrono>
 #include <string>
+#include <barrier>
 
 // simulates the mersenne rng of platinum
 // mersenne is seeded the same way that the lcrng is, but it produces values much differently
@@ -31,6 +33,12 @@ struct MTRNG_CONTEXT {
     int sMTRNG_Size;
 
 };
+std::vector<std::atomic<int>> seedCounts(200);
+
+void threadFunction(std::vector<std::atomic<int>>& seedCounts, int index) {
+    // Atomic increment
+    seedCounts[index]++;
+}
 // static unsigned long sMTRNG_State[624];
 // static int sMTRNG_Size = 624 + 1;
 static unsigned long sMTRNG_Xor[2] = {0x0UL, 0x9908b0dfUL};
@@ -221,7 +229,57 @@ Seed fantinaSim(Range r) {
 }
 
 Seed fantinaOptimalSim(Range r) {
-    
+      // circle 0
+    // square 1
+    // triangle 2?
+
+    // star 6
+    std::vector<std::atomic<int>> indexHint(200);
+    for(int i = 0; i < 200; i++){
+        indexHint[i] = 0;
+    }
+    indexHint[0] = 0
+    Seed retSeed = {0, 0};
+    int cycles;
+    bool goToZone2;
+    int hintNumber;
+    bool finishedPuzzle;
+    MTRNG_CONTEXT rngc;
+    rngc.sMTRNG_Size = 624 + 1;
+    int checkCycle = 1;
+    for(int i = r.start; i < r.stop; i++){
+        finishedPuzzle = false;
+        MTRNG_SetSeed(i, &rngc);
+        hintNumber = 0;
+        cycles = 0;
+        goToZone2 = false;
+        while(cycles < checkCycle) {
+            hintNumber = simulate(ZONE1, &rngc);
+
+
+            if(hintNumber == indexHint[cycles]) {
+                // is triangle, the door we chose
+                goToZone2 = true;
+            }
+            if(goToZone2) {
+                hintNumber = simulate(ZONE2, &rngc);
+                if(hintNumber == 7) {
+                    finishedPuzzle = true;
+                } else {
+                    goToZone2 = false;
+                }
+            }
+            cycles++;
+        }
+
+        if(cycles > retSeed.cycles) {
+            retSeed.cycles = cycles;
+            retSeed.startingSeed = i;
+        }
+
+    }
+
+    return retSeed;
 }
 Seed coinFlipSim(Range r) {
     Seed retSeed = {0, 0};
@@ -235,6 +293,7 @@ Seed coinFlipSim(Range r) {
             // flip a coin 100 times
             cycles = cycles + (MTRNG_Next(&rngc) & 1);
         }
+        threadFunction(seedCounts, cycles);
         if(cycles > retSeed.cycles) {
             retSeed.cycles = cycles;
             retSeed.startingSeed = i;
@@ -271,18 +330,22 @@ int main()
 {
     std::cout<<"<booting>"<<std::endl;
     // displaySeed(2462131795);
-    coinFlipIndividual(2462131795);
-    return 0;
+    // coinFlipIndividual(2462131795);
+    // return 0;
 
     using std::chrono::high_resolution_clock;
     using std::chrono::duration_cast;
     using std::chrono::duration;
     using std::chrono::milliseconds;
     auto t1 = high_resolution_clock::now();
-    unsigned long end = 4294967294UL;
+    for(int j = 0; j < 200; j++) {
+        seedCounts[j] = 0;
+    }
+    // unsigned long end = 4294967294UL;
     // unsigned long end = 169496720UL;
-    // unsigned long end = 16000000UL;
+    unsigned long end = 16000000UL;
     int divisor = 16; // how many chunks to use
+    std::barrier sync_point(divisor);
     unsigned long neow = end/divisor;
     Seed val;
     Seed max = {0, 0};
@@ -293,7 +356,7 @@ int main()
     // bigger seed for high/low stuff
     std::vector<std::future<Seed>> futures;
     for(auto &e : ranges){
-        futures.push_back(std::async(coinFlipSim, e));
+        futures.push_back(std::async(fantinaOptimalSim, e, std::ref(sync_point)));
     }
     //retrive and print the value stored in the future
     for(auto &e : futures) {
@@ -315,7 +378,22 @@ int main()
 
     std::cout << ms_int.count() << "ms\n";
     std::cout << ms_double.count() << "ms\n";
+    int op = 0;
+    int unlock = 1;
+    for(int i = 0; i < 200; i++){
+        op = seedCounts[i];
+        if(op > 0) {
+            unlock = 1;
+        }
+        if(unlock > 0) {
+            std::cout << seedCounts[i] << ", ";
+        }
 
+        // if(val > 0){
+        //     // std::cout << seedCounts[i] << ", ";
+        //     std::cout << i << ": " << seedCounts[i] << "\n";
+        // }
+    }
     return 0;
 
 }

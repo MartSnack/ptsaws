@@ -177,31 +177,33 @@ BiggerSeed getMoveOutOfTheWayTime(Range r){
     return worstSeed;
 }
 
-Seed getWanderTime(Range r){
-    Seed worstSeed = {0,0};
+BiggerSeed getWanderTime(Range r){
+    BiggerSeed worstSeed = {0,0,0,0};
     bool seen = false;
     unsigned long seed = 0;
     int framesPassed = 0;
+    int xMax = 2;
+    int yMax = 2;
     Foo value = {0,0};
     int waittime = 0;
-    int currentPositionX = 2;
-    int currentPositionY = 2;
+    int currentPositionX = xMax;
+    int currentPositionY = yMax;
     int arr[3][3] = {
             {0,0,0},
             {0,0,0},
-            {0,0,1}
+            {0,0,1},
         };
     int direction = 0;
     for(unsigned long i = r.start; i < r.stop; i++){
 
-        for(int j = 0; j < 3; j++){
-            for(int k = 0; k < 3; k++){
+        for(int j = 0; j < xMax + 1; j++){
+            for(int k = 0; k < yMax + 1; k++){
                 arr[j][k] = 0;
             }
         }
-        arr[2][2] = 1;
-        currentPositionX = 2;
-        currentPositionY = 2;
+        arr[xMax][yMax] = 1;
+        currentPositionX = xMax;
+        currentPositionY = yMax;
         seed = i;
         framesPassed = 0;
         seen = false;
@@ -216,8 +218,8 @@ Seed getWanderTime(Range r){
             direction = value.result % 4;
             if(direction == 0){
                 currentPositionY = currentPositionY + 1;
-                if(currentPositionY > 2) {
-                    currentPositionY = 2;
+                if(currentPositionY > yMax) {
+                    currentPositionY = yMax;
                     framesPassed = framesPassed + 4;
                 } else {
                     framesPassed = framesPassed + 18;
@@ -232,8 +234,8 @@ Seed getWanderTime(Range r){
                 }
             } else if(direction == 3){
                 currentPositionX = currentPositionX + 1;
-                if(currentPositionX > 2) {
-                    currentPositionX = 2;
+                if(currentPositionX > xMax) {
+                    currentPositionX = xMax;
                     framesPassed = framesPassed + 4;
                 } else {
                     framesPassed = framesPassed + 18;
@@ -247,20 +249,134 @@ Seed getWanderTime(Range r){
                     framesPassed = framesPassed + 18;
                 }
             }
-            if(currentPositionX == 0 & currentPositionY == 0 & direction == 1){
+            if(currentPositionX == 0 && currentPositionY == 0 && direction == 1){
                 seen = true;
             }
             arr[currentPositionY][currentPositionX] = direction + 1;
         }
-        if(framesPassed >= worstSeed.cycles) {
-            worstSeed = {framesPassed, i};
+
+        if(framesPassed >= worstSeed.highest) {
+            worstSeed.highest = framesPassed;
+            worstSeed.highestSeed = i;
         }
-        framesPassed = framesPassed/3600;
-        seedCounts[framesPassed] = seedCounts[framesPassed] + 1;
+        if(framesPassed < worstSeed.lowest || worstSeed.lowest == 0){
+            worstSeed.lowest = framesPassed;
+            worstSeed.lowestSeed = i;
+        }
+        framesPassed = framesPassed / 60;
+        if(framesPassed >= worstSeed.highest2) {
+            worstSeed.highest2 = framesPassed;
+            worstSeed.highestSeed2 = i;
+        }
+        if(framesPassed < worstSeed.lowest2 || worstSeed.lowest2 == 0){
+            worstSeed.lowest2 = framesPassed;
+            worstSeed.lowestSeed2 = i;
+        }
+        threadFunction(seedCounts, framesPassed);
     }
     return worstSeed;
 }
+//
+BiggerSeed getWanderTimeSolo(unsigned long i){
+    BiggerSeed worstSeed = {0,0,0,0};
+    bool seen = false;
+    unsigned long seed = 0;
+    int framesPassed = 0;
+    Foo value = {0,0};
+    int waittime = 0;
+    int currentPositionX = 2;
+    int currentPositionY = 2;
+    int arr[3][3] = {
+            {0,0,0},
+            {0,0,0},
+            {0,0,1}
+        };
+    int direction = 0;
 
+    for(int j = 0; j < 3; j++){
+        for(int k = 0; k < 3; k++){
+            arr[j][k] = 0;
+        }
+    }
+    arr[2][2] = 1;
+    currentPositionX = 2;
+    currentPositionY = 2;
+    seed = i;
+    framesPassed = 0;
+    seen = false;
+    while(!seen){
+        arr[currentPositionY][currentPositionX] = 0;
+        value = advanceSeed(seed);
+        seed = value.seed;
+        waittime = 30 + (32 * (value.result % 4));
+        framesPassed = framesPassed + waittime;
+        value = advanceSeed(seed);
+        seed = value.seed;
+        direction = value.result % 4;
+        if(direction == 0){
+            std::cout << "up" << std::endl;
+            currentPositionY = currentPositionY + 1;
+            if(currentPositionY > 2) {
+                currentPositionY = 2;
+                framesPassed = framesPassed + 4;
+            } else {
+                framesPassed = framesPassed + 18;
+            }
+        } else if(direction == 1){
+            std::cout << "down" << std::endl;
+            currentPositionY = currentPositionY - 1;
+            if(currentPositionY < 0){
+                currentPositionY = 0;
+                framesPassed = framesPassed + 4;
+            } else {
+                framesPassed = framesPassed + 18;
+            }
+        } else if(direction == 3){
+            std::cout << "right" << std::endl;
+            currentPositionX = currentPositionX + 1;
+            if(currentPositionX > 2) {
+                currentPositionX = 2;
+                framesPassed = framesPassed + 4;
+            } else {
+                framesPassed = framesPassed + 18;
+            }
+        } else if(direction == 2){
+            std::cout << "left" << std::endl;
+            currentPositionX = currentPositionX - 1;
+            if(currentPositionX < 0){
+                currentPositionX = 0;
+                framesPassed = framesPassed + 4;
+            } else {
+                framesPassed = framesPassed + 18;
+            }
+        }
+        if(currentPositionX == 0 & currentPositionY == 0 & direction == 1){
+            seen = true;
+        }
+        arr[currentPositionY][currentPositionX] = direction + 1;
+    }
+
+    if(framesPassed >= worstSeed.highest) {
+        worstSeed.highest = framesPassed;
+        worstSeed.highestSeed = i;
+    }
+    if(framesPassed < worstSeed.lowest || worstSeed.lowest == 0){
+        worstSeed.lowest = framesPassed;
+        worstSeed.lowestSeed = i;
+    }
+    framesPassed = framesPassed / 60;
+    std::cout << framesPassed << std::endl;
+    if(framesPassed >= worstSeed.highest2) {
+        worstSeed.highest2 = framesPassed;
+        worstSeed.highestSeed2 = i;
+    }
+    if(framesPassed < worstSeed.lowest2 || worstSeed.lowest2 == 0){
+        worstSeed.lowest2 = framesPassed;
+        worstSeed.lowestSeed2 = i;
+    }
+    threadFunction(seedCounts, framesPassed);
+    return worstSeed;
+}
 // rng cheatsheet
 // +2 at start of round of combat
 // +2 at start of your turn
@@ -680,9 +796,10 @@ BiggerSeed getWildXp(Range r) {
     unsigned long pidBottom = 0;
     unsigned long pid = 0;
     // int xpSlots[12] = {30, 45, 38, 57, 23, 23, 68, 46, 46, 46, 46, 46}; // ravaged path
-    int xpSlots[12] = {16, 16, 24, 24, 24, 24, 32, 33, 32, 33, 32, 33}; // lake verity
+    // int xpSlots[12] = {16, 16, 24, 24, 24, 24, 32, 33, 32, 33, 32, 33}; // lake verity
     // int xpSlots[12] = {95, 101, 95, 101, 108, 115, 108, 115, 115, 115, 115, 115}; // old chat
     // int xpSlots[12] = {119, 114, 109, 119, 119, 119, 119, 119, 119, 149, 119, 162}; // maniac cave
+    int xpSlots[12] = {16, 16, 24, 23, 24, 24, 24, 24, 16, 16, 16, 16}; // lake verity
 
     // int evSlots[12] = {0,1,0,1,0,1,0,1,0,1,0,1}; // lake verity
         int evSlots[12] = {1,1,1,1,1,1,1,1,1,1,1,1}; // lake verity
@@ -696,7 +813,7 @@ BiggerSeed getWildXp(Range r) {
         value = advanceSeed(seed);
         slot = 0;
         nature = 0;
-        while(battles < 100) {
+        while(totalXp < 284) {
             if(stepCounter >= maxSteps | value.result/0x290 < 5){
                 if(stepCounter < maxSteps){
                     value = advanceSeed(value.seed);
@@ -763,7 +880,7 @@ BiggerSeed getWildXp(Range r) {
             value= advanceSeed(value.seed);
 
         }
-        threadFunction(seedCounts, totalXp);
+        threadFunction(seedCounts, totalXp - 284);
         if(totalXp > worstSeed.highest | worstSeed.highest == 0){
             worstSeed.highest = totalXp;
             worstSeed.highestSeed = i;
@@ -824,7 +941,7 @@ BiggerSeed getWildXpSweetScent(Range r) {
         value = advanceSeed(seed);
         slot = 0;
         nature = 0;
-        while(battles < 10) {
+        while(totalXp < 284) {
            
                         value = advanceSeed(value.seed);
                         slot = value.result/656;
@@ -1166,6 +1283,8 @@ int main()
     // std::cout << ss.highest << std::endl;
     // std::cout << ss.highestSeed << std::endl;
     // return 0;
+    // getWanderTimeSolo(86445);
+    // return 0;
 
     for(int i = 0; i < 3500; i++){
         seedCounts[i] = 0;
@@ -1179,10 +1298,12 @@ int main()
     std::string resultsFilename = dirName + "/simulationResults.txt";
     fs::create_directories(dirName);
     std::ofstream resultsFile(resultsFilename);
-    unsigned long end = 4294967294UL;
+    // unsigned long end = 4294967294UL;
     // unsigned long end = 1073741824UL;
     // unsigned long end = 131072UL;
-    int divisor = 128; // how many chunks to use
+    unsigned long end = 1262144UL;
+    // unsigned long end = 9859990UL;
+    int divisor = 16; // how many chunks to use
     unsigned long neow = end/divisor;
     BiggerSeed max = {0,0};
     BiggerSeed min = {0,0};
@@ -1196,7 +1317,7 @@ int main()
     // bigger seed for high/low stuff
     std::vector<std::future<BiggerSeed>> futures;
     for(auto &e : ranges){
-        futures.push_back(std::async(getWildXp, e));
+        futures.push_back(std::async(getWanderTime, e));
     }
     //retrive and print the value stored in the future
     for(auto &e : futures) {

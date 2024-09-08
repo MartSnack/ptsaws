@@ -670,14 +670,15 @@ BattleContext setupJupiterFight(unsigned long startingSeed) {
     return bc;
 }
 BattleContext setupVarFight(unsigned long startingSeed) {
-    PokeClient p1 = getChimcharClient();
-    PokeClient p2 = getTristanClient();
+    PokeClient p1 = getPlayerFantinaClient();
+    PokeClient p2 = getFantinaClient();
+    p1.team[p1.battler].bVal.evaStg = 12;
+    p1.team[p1.battler].bVal.spDefStg = 7;
+    p1.team[p1.battler].bVal.substituteHp = 24;
+    p1.team[p1.battler].bVal.item = ITEM_BOOST_DARK;
     p1.pokeSwitch(p1.battler);
     p2.pokeSwitch(p2.battler);
-    // p1.team[p1.battler].bVal.evaStg = 12;
-    // p1.team[p1.battler].bVal.spDefStg = 7;
-    // p1.team[p1.battler].bVal.substituteHp = 24;
-    // p1.team[p1.battler].bVal.item = ITEM_BOOST_DARK;
+
     // p1.team[p1.battler].sendOut();
     // p2.team[p2.battler].sendOut();
     RngSeed rs = {startingSeed, 0};
